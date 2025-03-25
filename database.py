@@ -1,5 +1,7 @@
 # Functions to handle the database
-import sqlite3  
+import sqlite3
+import typer
+from rich import print
 
 def databset_init():
     """
@@ -43,8 +45,9 @@ def add_link(url: str):
         ''', (url,))
         conn.commit()
         cur.close()
+        print("[sea_green1 bold]URL added successfully![/]")
     except sqlite3.Error as error:
-        print('Error occurred - ', error)
+        print("[red bold]Error occurred - [/]", error)
     finally:
         if conn:
             conn.close()
