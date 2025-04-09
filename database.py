@@ -3,6 +3,13 @@ import sqlite3
 import typer
 from rich import print
 
+
+def log_database_interactions(func):
+    """Decorator to wrap functions that handle database operations."""
+    def wrapper(*args, **kwargs):
+        if func.__name__ == "databset_init":
+            print("
+
 def databset_init():
     """
     Function to initialize the database, or just check it is initialised.

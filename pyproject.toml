@@ -6,8 +6,12 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "jupyter>=1.1.1",
-    "numpy>=2.2.4",
+    "keras>=3.9.0",
+    "nltk>=3.9.1",
+    "numpy==2.1.0",
     "pandas>=2.2.3",
-    "rich>=13.9.4",
+    "requests>=2.32.3",
+    "scikit-learn>=1.6.1",
+    "tensorflow>=2.19.0",
     "typer>=0.15.2",
 ]
