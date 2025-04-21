@@ -1,18 +1,29 @@
 # Functions to handle the database
 import sqlite3
 import typer
-from rich import print
+from rich import print as rich_print
+import logging
 
 
 def log_database_interactions(func):
     """Decorator to wrap functions that handle database operations."""
     def wrapper(*args, **kwargs):
         if func.__name__ == "databset_init":
-            print("")
+            logging.info("Initializing the database...")
+        elif func.__name__ == "add_link":
+            logging.info("Adding the link: %s to the table 'links'...", args[0])
+        elif func.__name__ == "quality_check":
+            logging.info("Performing quality check on the table 'links'...")
+            
+        result = func(*args, **kwargs)
 
+        return result
+    return wrapper
+
+@log_database_interactions
 def databset_init():
     """
-    Function to initialize the database, or just check it is initialised.
+    Function to initialize the database, or just check it is initialized.
     Database: 'bookmarks.db'. 
     Tables: 'links'. 
     """
@@ -20,7 +31,6 @@ def databset_init():
         # Connect to DB and create a cursor
         db_connection = sqlite3.connect('bookmarks.db')
         cur = db_connection.cursor()
-
         # Create a table if does not exists
         cur.execute('''
             CREATE TABLE IF NOT EXISTS links (
@@ -28,17 +38,18 @@ def databset_init():
                 URL TEXT
             )
         ''')
-        
         # Close the cursor
         cur.close()
+        logging.info("... database initialized successfully with table 'links'.")
 
     except sqlite3.Error as error:
-        print('Error occurred - ', error)
+        logging.error("Error occurred - %s", error)
     finally:
         if db_connection:
             db_connection.close()
     return None
 
+@log_database_interactions
 def add_link(url: str):
     """Given an URL add the link to the database."""
     try:
@@ -52,14 +63,16 @@ def add_link(url: str):
         ''', (url,))
         conn.commit()
         cur.close()
-        print("[sea_green1 bold]URL added successfully![/]")
+        rich_print("[sea_green1 bold]URL added successfully![/]")
+        logging.info("... URL added successfully to the table 'links'.")
     except sqlite3.Error as error:
-        print("[red bold]Error occurred - [/]", error)
+        logging.error("Error occurred - %s", error)
     finally:
         if conn:
             conn.close()
     return None
 
+@log_database_interactions
 def quality_check():
     """Remove rows if:
     - URL is empty or NULL
@@ -81,9 +94,7 @@ def quality_check():
                 DELETE FROM links
                 WHERE URL IS NULL OR URL = ''
             ''')
-            print("[red]...empty URLs removed:[/]")
-            for r in res:
-                print(f'\t{r}')
+            logging.warning("...empty URLs removed (id, URL): %s", res)
         conn.commit()
 
         # Check for duplicated URLs
@@ -104,9 +115,7 @@ def quality_check():
                     GROUP BY URL
                 )
             ''')
-            print("[red]...duplicated URLs removed:[/]")
-            for r in res:
-                print(f'\t{r}')
+            logging.warning("...duplicated URLs removed (id, URL): %s", res)
         conn.commit()
 
         # Check for valid URLs
@@ -119,15 +128,13 @@ def quality_check():
                 DELETE FROM links
                 WHERE URL NOT LIKE 'http%'
             ''')
-            print("[red]...invalid URLs removed:[/]")
-            for r in res:
-                print(f'\t{r}')
+            logging.warning("...invalid URLs removed (id, URL): %s", res)
         conn.commit()
 
         cur.close()
 
     except sqlite3.Error as error:
-        print("[red bold]Error occurred - [/]", error)
+        logging.error("Error occurred - %s", error)
     finally:
         if conn:
             conn.close()

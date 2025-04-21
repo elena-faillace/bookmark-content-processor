@@ -1,5 +1,6 @@
 # Added by ELENA
 .DS_Store
+logged_messages.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
