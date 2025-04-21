@@ -1,13 +1,13 @@
 [project]
-name = "lm-links-app"
+name = "llm-links-app"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "ipykernel>=6.29.5",
     "jupyter>=1.1.1",
     "keras>=3.9.0",
-    "nltk>=3.9.1",
     "numpy==2.1.0",
     "pandas>=2.2.3",
     "requests>=2.32.3",
