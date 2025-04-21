@@ -8,7 +8,7 @@ def log_database_interactions(func):
     """Decorator to wrap functions that handle database operations."""
     def wrapper(*args, **kwargs):
         if func.__name__ == "databset_init":
-            print("
+            print("")
 
 def databset_init():
     """
