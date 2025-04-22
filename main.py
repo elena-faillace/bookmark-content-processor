@@ -13,8 +13,8 @@ logging.basicConfig(stream=log_stream, level=logging.INFO)
 
 
 def main():
+    """Main loop for the app menu."""
     try:
-        """Main loop for the app menu."""
         rich_print("\nOpened the bookmarks manager app... press 'q' to quit.\n")
 
         # Initialise the database
@@ -39,14 +39,14 @@ def main():
                 break
             elif choice == "a":
                 url = input("Insert the URL:\n")
-                logging.info("User chose to add a URL: %s", url)
+                logging.info("User chose to add a URL: '%s'", url)
                 add_link(url)
             elif choice == "list":
                 logging.info("User chose to get the list of bookmarks.")
                 get_list_links()
             else:
                 rich_print(f"[dark_orange bold]Invalid command: [/] '{choice}'")
-                logging.warning("Invalid command: %s", choice)
+                logging.warning("Invalid command: '%s'", choice)
 
         # Before closing the app check that the URLs are valid, not duplicated and not empty
         quality_check()

@@ -47,6 +47,7 @@ def databset_init():
 
     except sqlite3.Error as error:
         logging.error("Error occurred - %s", error)
+        rich_print("[red]Error occurred while initializing the database.[/]")
     finally:
         if db_connection:
             db_connection.close()
@@ -70,6 +71,7 @@ def add_link(url: str):
         logging.info("... URL added successfully to the table 'links'.")
     except sqlite3.Error as error:
         logging.error("Error occurred - %s", error)
+        rich_print("[red]Error occurred while adding the URL.[/]")
     finally:
         if conn:
             conn.close()
@@ -138,6 +140,7 @@ def quality_check():
 
     except sqlite3.Error as error:
         logging.error("Error occurred - %s", error)
+        rich_print("[red]Error occurred while performing quality check.[/]")
     finally:
         if conn:
             conn.close()
@@ -164,6 +167,7 @@ def get_list_links():
         cur.close()
     except sqlite3.Error as error:
         logging.error("Error occurred in 'get_list_links' - %s", error)
+        rich_print("[red]Error occurred while saving the list of URLs.[/]")
     finally:
         if conn:
             conn.close()
