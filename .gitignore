@@ -2,7 +2,7 @@
 .DS_Store
 logged_messages.txt
 bookmarks.db
-list_bookmarks.db
+list_bookmarks.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
