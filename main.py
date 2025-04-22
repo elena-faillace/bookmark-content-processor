@@ -23,7 +23,7 @@ def main():
         while True:
             # Display the menu
             menu = Table(
-                "option", "command", title="Bookmarks Manager", show_header=True
+                "[plum1 bold]Options[/]", "[light_pink1 bold]Commands[/]", title="[orchid2 bold]Bookmarks Manager[/]", show_header=True
             )
             menu.add_row("Add a bookmark: ", "a")
             menu.add_row("Quit the application:", "q")
