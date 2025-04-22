@@ -14,7 +14,9 @@ def log_database_interactions(func):
             logging.info("Adding the link: %s to the table 'links'...", args[0])
         elif func.__name__ == "quality_check":
             logging.info("Performing quality check on the table 'links'...")
-            
+        elif func.__name__ == "get_list_links":
+            logging.info("Getting the list of links from the table 'links'...")
+
         result = func(*args, **kwargs)
 
         return result
@@ -35,6 +37,7 @@ def databset_init():
         cur.execute('''
             CREATE TABLE IF NOT EXISTS links (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Date DATE DEFAULT CURRENT_TIMESTAMP,
                 URL TEXT
             )
         ''')
@@ -58,8 +61,8 @@ def add_link(url: str):
         cur = conn.cursor()
         # Insert the URL
         cur.execute('''
-            INSERT INTO links (URL)
-            VALUES (?)
+            INSERT INTO links (Date, URL)
+            VALUES (CURRENT_TIMESTAMP, ?)
         ''', (url,))
         conn.commit()
         cur.close()
@@ -135,6 +138,32 @@ def quality_check():
 
     except sqlite3.Error as error:
         logging.error("Error occurred - %s", error)
+    finally:
+        if conn:
+            conn.close()
+    return None
+
+@log_database_interactions
+def get_list_links():
+    """Get the list of all the saved URLs by saving it to a .txt file.
+    """
+    try:
+        # Create connection and cursor
+        conn = sqlite3.connect('bookmarks.db')
+        cur = conn.cursor()
+        # Get the list of URLs
+        res = cur.execute('''
+            SELECT URL FROM links
+        ''').fetchall()
+        # Save the list to a .txt file
+        with open('list_bookmarks.txt', 'w', encoding='utf-8') as f:
+            for row in res:
+                f.write(row[0] + '\n')
+        logging.info("...list of URLs saved to list_bookmarks.txt")
+        rich_print("[sea_green1 bold]List of URLs saved to list_bookmarks.txt![/]")
+        cur.close()
+    except sqlite3.Error as error:
+        logging.error("Error occurred in 'get_list_links' - %s", error)
     finally:
         if conn:
             conn.close()

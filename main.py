@@ -2,7 +2,7 @@ import logging
 from io import StringIO
 
 import typer
-from database import add_link, databset_init, quality_check
+from database import databset_init, add_link, quality_check, get_list_links
 from rich import print as rich_print
 from rich.console import Console
 from rich.table import Table
@@ -27,6 +27,7 @@ def main():
             )
             menu.add_row("Add a bookmark: ", "a")
             menu.add_row("Quit the application:", "q")
+            menu.add_row("Get list of bookmarks (to .txt file):", "list")
             rich_print("\n")
             console.print(menu)
             rich_print("\n")
@@ -40,8 +41,11 @@ def main():
                 url = input("Insert the URL:\n")
                 logging.info("User chose to add a URL: %s", url)
                 add_link(url)
+            elif choice == "list":
+                logging.info("User chose to get the list of bookmarks.")
+                get_list_links()
             else:
-                rich_print(f"[dark_orange bold]Invalid command: [/] {choice}")
+                rich_print(f"[dark_orange bold]Invalid command: [/] '{choice}'")
                 logging.warning("Invalid command: %s", choice)
 
         # Before closing the app check that the URLs are valid, not duplicated and not empty
