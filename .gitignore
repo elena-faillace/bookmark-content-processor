@@ -1,6 +1,7 @@
 # Added by ELENA
 .DS_Store
 logged_messages.txt
+bookmarks.db
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
