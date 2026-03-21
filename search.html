@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bookmark Search</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f13;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 8px; color: #c39bd3; }
+    p.subtitle { font-size: 0.9rem; color: #888; margin-bottom: 32px; }
+    .search-row {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      max-width: 600px;
+      margin-bottom: 32px;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #1a1a24;
+      color: #e0e0e0;
+      font-size: 1rem;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: #c39bd3; }
+    button {
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: none;
+      background: #c39bd3;
+      color: #0f0f13;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:hover { background: #d8b4e2; }
+    #results { width: 100%; max-width: 600px; }
+    .result-item {
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+    }
+    .result-item a {
+      color: #88c0d0;
+      text-decoration: none;
+      word-break: break-all;
+      font-size: 0.95rem;
+    }
+    .result-item a:hover { text-decoration: underline; }
+    .empty { color: #666; text-align: center; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Bookmark Search</h1>
+  <p class="subtitle">Search your saved pages with natural language</p>
+  <div class="search-row">
+    <input type="text" id="query" placeholder="e.g. machine learning tutorials" />
+    <button onclick="doSearch()">Search</button>
+  </div>
+  <div id="results"></div>
+
+  <script>
+    document.getElementById("query").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") doSearch();
+    });
+
+    async function doSearch() {
+      const q = document.getElementById("query").value.trim();
+      const container = document.getElementById("results");
+      if (!q) return;
+
+      container.innerHTML = '<p class="empty">Searching...</p>';
+
+      try {
+        const res = await fetch(`/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+
+        if (!data.results || data.results.length === 0) {
+          container.innerHTML = '<p class="empty">No results found.</p>';
+          return;
+        }
+
+        container.innerHTML = data.results
+          .map(
+            (url, i) =>
+              `<div class="result-item"><span style="color:#666;margin-right:8px">${i + 1}.</span><a href="${url}" target="_blank" rel="noopener">${url}</a></div>`
+          )
+          .join("");
+      } catch (err) {
+        container.innerHTML = '<p class="empty">Error connecting to the API.</p>';
+      }
+    }
+  </script>
+</body>
+</html>

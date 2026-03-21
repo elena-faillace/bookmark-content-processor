@@ -5,15 +5,19 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "chromadb>=1.5.5",
+    "fastapi>=0.135.1",
     "ipykernel>=6.29.5",
     "jupyter>=1.1.1",
     "numpy==2.1.0",
     "pandas>=2.2.3",
     "requests>=2.32.3",
     "scikit-learn>=1.6.1",
+    "sentence-transformers>=5.3.0",
     "tensorflow>=2.19.0",
     "tf-keras>=2.19.0",
     "trafilatura>=2.0.0",
     "transformers>=4.52.3",
     "typer>=0.15.2",
+    "uvicorn>=0.42.0",
 ]
