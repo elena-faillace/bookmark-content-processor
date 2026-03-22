@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync
 
 # Run the API server
-uvicorn app.api:app --reload --port 8000
+uvicorn app.api:app --reload --port 8484
 ```
 
 ## Architecture
@@ -24,7 +24,7 @@ A bookmark manager with semantic search. Python 3.12+, managed with UV. Exposes 
 
 - `ui/search.html` — Static search UI served by FastAPI at `GET /`.
 
-- `extension/` — Chrome Manifest V3 extension. Reads the active tab URL and POSTs to `localhost:8000/save`.
+- `extension/` — Chrome Manifest V3 extension. Reads the active tab URL and POSTs to `localhost:8484/save`.
 
 - `docs/GUIDE.md` — Full technical guide explaining the app's flow and every technology choice.
 

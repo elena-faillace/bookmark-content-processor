@@ -106,7 +106,7 @@ const url = tab.url;
 `chrome.tabs.query()` is a browser API that returns a list of tabs matching the criteria. `{ active: true, currentWindow: true }` means "the tab the user is looking at right now". The `[tab]` syntax is destructuring — it unpacks the first element of the returned array.
 
 ```js
-const res = await fetch("http://localhost:8000/save", {
+const res = await fetch("http://localhost:8484/save", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ url }),
@@ -119,13 +119,9 @@ const res = await fetch("http://localhost:8000/save", {
 
 The `try/catch/finally` block handles errors gracefully — if the server isn't running, the extension shows "Could not reach the local server" instead of crashing silently.
 
-### Why this approach
-
-The alternative would be a browser bookmark (Ctrl+D). But browser bookmarks can't run code — they can't extract page text, embed it, or enable semantic search. A Chrome extension is the lightest way to trigger a local computation from within the browser.
-
 ---
 
-## 4. The API server — the brain of the app
+## 4. The API server
 
 **File:** `api.py`
 
@@ -162,7 +158,7 @@ app.add_middleware(
 )
 ```
 
-**CORS** (Cross-Origin Resource Sharing) is a browser security rule. By default, browsers block JavaScript on one origin (e.g. a Chrome extension) from calling a server on a different origin (e.g. `localhost:8000`). Adding CORS middleware tells FastAPI to send back headers that say "this server allows requests from anywhere", which lets the extension and the search UI call the API.
+**CORS** (Cross-Origin Resource Sharing) is a browser security rule. By default, browsers block JavaScript on one origin (e.g. a Chrome extension) from calling a server on a different origin (e.g. `localhost:8484`). Adding CORS middleware tells FastAPI to send back headers that say "this server allows requests from anywhere", which lets the extension and the search UI call the API.
 
 ### Input validation — api.py:36–37
 
@@ -333,7 +329,7 @@ You could technically store vectors in SQLite as binary blobs, but you'd have to
 
 **File:** `search.html`
 
-This is a single self-contained HTML file served by FastAPI at `GET /`. When you open `http://localhost:8000` in a browser, FastAPI reads the file from disk and sends it back:
+This is a single self-contained HTML file served by FastAPI at `GET /`. When you open `http://localhost:8484` in a browser, FastAPI reads the file from disk and sends it back:
 
 ```python
 @app.get("/")
@@ -358,7 +354,7 @@ User clicks extension button
 popup.js reads tab.url
         │
         ▼
-fetch POST localhost:8000/save  { url: "https://example.com" }
+fetch POST localhost:8484/save  { url: "https://example.com" }
         │
         ▼
 api.py: save_url()
@@ -391,7 +387,7 @@ popup.js shows "Saved!" in the popup
 User types "dog nutrition" in search.html
         │
         ▼
-fetch GET localhost:8000/search?q=dog+nutrition
+fetch GET localhost:8484/search?q=dog+nutrition
         │
         ▼
 api.py: search_urls()

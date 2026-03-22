@@ -12,7 +12,7 @@
         <string>uvicorn</string>
         <string>app.api:app</string>
         <string>--port</string>
-        <string>8000</string>
+        <string>8484</string>
     </array>
 
     <key>WorkingDirectory</key>
