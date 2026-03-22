@@ -20,7 +20,7 @@ uv run pytest tests/ -v
 
 ## Architecture
 
-A bookmark manager with semantic search. Python 3.12+, managed with UV. Exposes a local HTTP API that a Chrome extension talks to.
+A bookmark manager with semantic search. Python 3.12+, managed with UV. Exposes a local HTTP API that browser extensions talk to.
 
 **Modules:**
 
@@ -32,11 +32,13 @@ A bookmark manager with semantic search. Python 3.12+, managed with UV. Exposes 
 
 - `ui/search.html` — Static search UI served by FastAPI at `GET /`.
 
-- `extension/` — Chrome Manifest V3 extension. Reads the active tab URL and POSTs to `localhost:8484/save`.
+- `extension-chrome/` — Chrome Manifest V3 extension. Reads the active tab URL and POSTs to `localhost:8484/save`.
+
+- `extension-firefox/` — Firefox Manifest V2 extension. Same popup UI/JS as Chrome; uses `browser_action` instead of `action` and requires `browser_specific_settings.gecko.id`. Both share identical `popup.html` and `popup.js` since Firefox supports the `chrome.*` namespace.
 
 - `docs/GUIDE.md` — Full technical guide explaining the app's flow and every technology choice.
 
-**Data flow:** Chrome extension → `POST /save` → `extract_text()` → success: `embed_and_store()` → `chroma_db/`; failure: `store_url_only()` → `chroma_db/`. Search: `GET /search?q=` → `embeddings.search()` → ChromaDB cosine query → ranked URLs.
+**Data flow:** Browser extension → `POST /save` → `extract_text()` → success: `embed_and_store()` → `chroma_db/`; failure: `store_url_only()` → `chroma_db/`. Search: `GET /search?q=` → `embeddings.search()` → ChromaDB cosine query → ranked URLs.
 
 ## Stack
 
