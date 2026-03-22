@@ -40,6 +40,15 @@ A bookmark manager with semantic search. Python 3.12+, managed with UV. Exposes 
 
 **Data flow:** Browser extension → `POST /save` → `extract_text()` → success: `embed_and_store()` → `chroma_db/`; failure: `store_url_only()` → `chroma_db/`. Search: `GET /search?q=` → `embeddings.search()` → ChromaDB cosine query → ranked URLs.
 
+## Process management
+
+This server is managed by Supervisor, configured in the separate `local-services` repo at `~/Documents/all_code/local-services/`. A single launchd entry (`com.local-services`) boots Supervisor at login; Supervisor manages this process and any future services.
+
+```bash
+supervisorctl status                  # check all services
+supervisorctl restart bookmark-processor  # restart this server
+```
+
 ## Stack
 
 - `fastapi` + `uvicorn` — HTTP server

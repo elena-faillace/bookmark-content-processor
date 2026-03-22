@@ -471,70 +471,45 @@ Imagine two arrows pointing from the origin. Cosine similarity measures the cosi
 
 ## 10. Running the server automatically on login
 
-By default you have to start the server manually in a terminal each time. macOS has a built-in system called **launchd** that can run the server automatically at login and restart it if it ever crashes — so you never have to touch a terminal for this again.
+This server is managed by **Supervisor**, configured in a separate `local-services` repository. Supervisor handles starting, stopping, and auto-restarting all local services. A single macOS **launchd** entry boots Supervisor itself at login.
 
-A **launch agent** is a small configuration file (`.plist` format — Apple's XML variant for settings) that tells launchd what to run, where to run it, and what to do if it exits. The file lives in `~/Library/LaunchAgents/` and macOS reads it at login.
+**Why this split?** launchd is macOS's native boot system — it's the right tool for starting a process at login. Supervisor is a dedicated process manager — it's the right tool for managing multiple services day-to-day (logs, restarts, status). Combining them gives you the best of both: automatic boot + rich process control.
 
-The plist template is already in this repo at `launchd/com.bookmark-processor.plist`.
+### Setup
 
-### One-time setup
-
-```bash
-# 1. Copy the plist to the LaunchAgents folder
-cp launchd/com.bookmark-processor.plist ~/Library/LaunchAgents/
-
-# 2. Create the log directory
-mkdir -p ~/Library/Logs/bookmark-processor
-
-# 3. Load it (registers it with launchd and starts it immediately)
-launchctl load ~/Library/LaunchAgents/com.bookmark-processor.plist
-
-# 4. Verify it started — you should see a PID in the first column
-launchctl list | grep bookmark
-```
-
-If the first column shows `-` instead of a number, the server failed to start. Check why:
+See the `local-services` repo at `~/Documents/all_code/local-services/` for one-time setup instructions. The short version:
 
 ```bash
-cat ~/Library/Logs/bookmark-processor/server.error.log
+brew install supervisor
+mkdir -p ~/Library/Logs/supervisor
+cp ~/Documents/all_code/local-services/launchd/com.local-services.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.local-services.plist
 ```
 
 ### Day-to-day control
 
 ```bash
-# Stop the server
-launchctl stop com.bookmark-processor
+# Check status of all services
+supervisorctl status
 
-# Start it again
-launchctl start com.bookmark-processor
+# Stop / start / restart this server
+supervisorctl stop bookmark-processor
+supervisorctl start bookmark-processor
+supervisorctl restart bookmark-processor
 
-# Remove it entirely (also stops the auto-start on login)
-launchctl unload ~/Library/LaunchAgents/com.bookmark-processor.plist
+# View logs
+tail -f ~/Library/Logs/supervisor/bookmark-processor.log
 ```
 
-### What the plist does
+### Adding a new service
 
-```xml
-<key>RunAtLoad</key><true/>
-```
-Starts the server as soon as macOS loads the agent (i.e. at login).
+Add a `.conf` file to `local-services/conf.d/` and run:
 
-```xml
-<key>KeepAlive</key><true/>
+```bash
+supervisorctl reread && supervisorctl update
 ```
-If the server process exits for any reason (crash, exception), launchd restarts it automatically.
 
-```xml
-<key>WorkingDirectory</key>
-<string>/Users/elenafaillace/Documents/all_code/bookmark-content-processor</string>
-```
-Runs the command from inside the project folder, which is required because the server opens `bookmarks.db` and `chroma_db/` using relative paths.
-
-```xml
-<key>StandardOutPath</key>
-<key>StandardErrorPath</key>
-```
-Redirect the server's terminal output to log files in `~/Library/Logs/bookmark-processor/`. This replaces what you'd normally see printed in the terminal.
+No new launchd plists needed.
 
 ### Performance impact
 
