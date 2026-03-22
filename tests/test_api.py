@@ -1,4 +1,6 @@
 """Tests for the Bookmarks API endpoints."""
+import json
+from pathlib import Path
 from unittest.mock import patch, call
 
 import pytest
@@ -112,6 +114,113 @@ class TestSearch:
     def test_missing_query_rejected(self, client):
         res = client.get("/search")
         assert res.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# POST /import/bookmarks
+# ---------------------------------------------------------------------------
+
+MOCK_BOOKMARKS = [
+    {"url": "https://example.com", "title": "Example"},
+    {"url": "https://new-site.com", "title": "New Site"},
+    {"url": "file:///local/file.html", "title": "Local File"},  # should be skipped
+]
+
+
+def _parse_sse(response) -> list[dict]:
+    """Parse all SSE data lines from a streaming response into a list of dicts."""
+    events = []
+    for line in response.text.splitlines():
+        if line.startswith("data: "):
+            events.append(json.loads(line[6:]))
+    return events
+
+
+class TestImportPreview:
+    def test_returns_counts(self, client):
+        with (
+            patch("app.api.read_chrome_bookmarks", return_value=MOCK_BOOKMARKS),
+            patch("app.api.get_all_stored_ids", return_value=set()),
+        ):
+            res = client.get("/import/bookmarks/preview")
+
+        assert res.status_code == 200
+        data = res.json()
+        assert data["to_import"] == 2       # 2 http URLs
+        assert data["already_saved"] == 1   # file:// not counted as saved, just excluded
+        assert data["total_found"] == 3
+
+    def test_deduplication_in_preview(self, client):
+        with (
+            patch("app.api.read_chrome_bookmarks", return_value=MOCK_BOOKMARKS),
+            patch("app.api.get_all_stored_ids", return_value={"https://example.com"}),
+        ):
+            res = client.get("/import/bookmarks/preview")
+
+        assert res.status_code == 200
+        assert res.json()["to_import"] == 1
+
+    def test_file_not_found_returns_404(self, client):
+        with patch("app.api.read_chrome_bookmarks", side_effect=FileNotFoundError):
+            res = client.get("/import/bookmarks/preview")
+        assert res.status_code == 404
+
+
+class TestImport:
+    def test_streams_sse_progress(self, client):
+        with (
+            patch("app.api.read_chrome_bookmarks", return_value=MOCK_BOOKMARKS),
+            patch("app.api.get_all_stored_ids", return_value=set()),
+            patch("app.api.extract_text", return_value="page content"),
+            patch("app.api.embed_and_store"),
+        ):
+            res = client.post("/import/bookmarks")
+
+        assert res.status_code == 200
+        assert "text/event-stream" in res.headers["content-type"]
+        events = _parse_sse(res)
+        assert events[-1]["done"] is True
+        assert events[-1]["imported"] == 2
+
+    def test_deduplication_skips_existing(self, client):
+        with (
+            patch("app.api.read_chrome_bookmarks", return_value=MOCK_BOOKMARKS),
+            patch("app.api.get_all_stored_ids", return_value={"https://example.com"}),
+            patch("app.api.extract_text", return_value=None),
+            patch("app.api.store_url_only") as mock_store,
+        ):
+            res = client.post("/import/bookmarks")
+
+        events = _parse_sse(res)
+        assert events[-1]["imported"] == 1   # only new-site.com
+        mock_store.assert_called_once()
+
+    def test_skips_non_http_urls(self, client):
+        bookmarks = [{"url": "file:///local.html", "title": "Local"}]
+        with (
+            patch("app.api.read_chrome_bookmarks", return_value=bookmarks),
+            patch("app.api.get_all_stored_ids", return_value=set()),
+        ):
+            res = client.post("/import/bookmarks")
+
+        events = _parse_sse(res)
+        assert events[-1]["imported"] == 0
+
+    def test_file_not_found_returns_404(self, client):
+        with patch("app.api.read_chrome_bookmarks", side_effect=FileNotFoundError):
+            res = client.post("/import/bookmarks")
+        assert res.status_code == 404
+
+    def test_extraction_failure_falls_back_to_url_only(self, client):
+        with (
+            patch("app.api.read_chrome_bookmarks", return_value=[MOCK_BOOKMARKS[0]]),
+            patch("app.api.get_all_stored_ids", return_value=set()),
+            patch("app.api.extract_text", return_value=None),
+            patch("app.api.store_url_only") as mock_store,
+        ):
+            res = client.post("/import/bookmarks")
+
+        mock_store.assert_called_once_with("https://example.com", "Example")
 
 
 # ---------------------------------------------------------------------------

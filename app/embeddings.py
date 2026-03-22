@@ -96,6 +96,14 @@ def quality_check() -> None:
         logging.error("quality_check error: %s", e)
 
 
+def get_all_stored_ids() -> set[str]:
+    """Return the set of all URL IDs currently stored in ChromaDB."""
+    collection = _get_collection()
+    if collection.count() == 0:
+        return set()
+    return set(collection.get(include=[])["ids"])
+
+
 def search(query: str, n: int = 10) -> list[dict]:
     """Return top-N results (url + title) whose content is most similar to the query."""
     try:

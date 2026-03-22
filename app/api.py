@@ -1,16 +1,18 @@
+import json
 import logging
 import time
 from contextlib import asynccontextmanager
 from io import StringIO
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, HttpUrl
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from .embeddings import embed_and_store, extract_text, quality_check, search as embedding_search, store_url_only
+from .bookmarks_import import read_chrome_bookmarks
+from .embeddings import embed_and_store, extract_text, get_all_stored_ids, quality_check, search as embedding_search, store_url_only
 from .request_log import init_log_db, log_request
 
 log_stream = StringIO()
@@ -76,6 +78,54 @@ def save_url(body: SaveRequest):
 
     store_url_only(url, title)
     return {"status": "saved", "url": url, "embedded": False}
+
+
+@app.get("/import/bookmarks/preview")
+def preview_bookmarks():
+    """Return counts of new vs already-saved bookmarks without importing anything."""
+    try:
+        bookmarks = read_chrome_bookmarks()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Chrome bookmarks file not found.")
+
+    existing = get_all_stored_ids()
+    to_import = [
+        bm for bm in bookmarks
+        if bm["url"].startswith("http") and bm["url"] not in existing
+    ]
+    return {
+        "to_import": len(to_import),
+        "already_saved": len(bookmarks) - len(to_import),
+        "total_found": len(bookmarks),
+    }
+
+
+@app.post("/import/bookmarks")
+def import_bookmarks():
+    """Import new Chrome bookmarks, streaming SSE progress events."""
+    try:
+        bookmarks = read_chrome_bookmarks()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Chrome bookmarks file not found.")
+
+    existing = get_all_stored_ids()
+    queue = [
+        bm for bm in bookmarks
+        if bm["url"].startswith("http") and bm["url"] not in existing
+    ]
+    total = len(queue)
+
+    def generate():
+        for i, bm in enumerate(queue, start=1):
+            text = extract_text(bm["url"])
+            if text:
+                embed_and_store(bm["url"], text, bm["title"])
+            else:
+                store_url_only(bm["url"], bm["title"])
+            yield f"data: {json.dumps({'imported': i, 'total': total})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'imported': total, 'total': total})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @app.get("/search")

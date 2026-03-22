@@ -47,6 +47,35 @@
       cursor: pointer;
     }
     button:hover { background: #d8b4e2; }
+    button:disabled { background: #555; color: #888; cursor: default; }
+    .import-row {
+      width: 100%;
+      max-width: 600px;
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .import-btn {
+      background: #1a1a24;
+      color: #c39bd3;
+      border: 1px solid #c39bd3;
+      font-size: 0.9rem;
+      padding: 10px 20px;
+    }
+    .import-btn:hover { background: #2a1a34; }
+    .import-confirm {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .import-confirm span { font-size: 0.9rem; color: #e0e0e0; flex: 1; }
+    .confirm-yes { background: #c39bd3; color: #0f0f13; font-size: 0.85rem; padding: 8px 16px; }
+    .confirm-yes:hover { background: #d8b4e2; }
+    .confirm-no { background: transparent; color: #888; border: 1px solid #444; font-size: 0.85rem; padding: 8px 16px; }
+    .confirm-no:hover { background: #1a1a24; color: #e0e0e0; }
+    .import-status { font-size: 0.85rem; color: #888; text-align: center; min-height: 18px; }
     #results { width: 100%; max-width: 600px; }
     .result-item {
       background: #1a1a24;
@@ -81,12 +110,87 @@
     <input type="text" id="query" placeholder="e.g. machine learning tutorials" />
     <button onclick="doSearch()">Search</button>
   </div>
+  <div class="import-row">
+    <button class="import-btn" id="importBtn" onclick="previewImport()">Import Chrome bookmarks</button>
+    <div class="import-confirm" id="importConfirm">
+      <span id="importConfirmText"></span>
+      <button class="confirm-yes" id="confirmYes" onclick="runImport()">Import</button>
+      <button class="confirm-no" onclick="cancelImport()">Cancel</button>
+    </div>
+    <div class="import-status" id="importStatus"></div>
+  </div>
   <div id="results"></div>
 
   <script>
     document.getElementById("query").addEventListener("keydown", (e) => {
       if (e.key === "Enter") doSearch();
     });
+
+    async function previewImport() {
+      const btn = document.getElementById("importBtn");
+      const statusEl = document.getElementById("importStatus");
+      btn.disabled = true;
+      statusEl.textContent = "Checking bookmarks...";
+      try {
+        const res = await fetch("/import/bookmarks/preview");
+        const data = await res.json();
+        if (!res.ok) {
+          statusEl.textContent = `Error: ${data.detail || res.statusText}`;
+          btn.disabled = false;
+          return;
+        }
+        statusEl.textContent = "";
+        btn.style.display = "none";
+        document.getElementById("importConfirmText").textContent =
+          `Found ${data.to_import} new bookmark${data.to_import !== 1 ? "s" : ""} (${data.already_saved} already saved).`;
+        document.getElementById("confirmYes").textContent = `Import ${data.to_import}`;
+        document.getElementById("importConfirm").style.display = "flex";
+      } catch (err) {
+        statusEl.textContent = "Could not reach the server.";
+        btn.disabled = false;
+      }
+    }
+
+    function cancelImport() {
+      document.getElementById("importConfirm").style.display = "none";
+      document.getElementById("importBtn").style.display = "";
+      document.getElementById("importBtn").disabled = false;
+      document.getElementById("importStatus").textContent = "";
+    }
+
+    async function runImport() {
+      document.getElementById("importConfirm").style.display = "none";
+      const statusEl = document.getElementById("importStatus");
+      statusEl.textContent = "Starting import...";
+      try {
+        const res = await fetch("/import/bookmarks", { method: "POST" });
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const data = JSON.parse(line.slice(6));
+            if (data.done) {
+              statusEl.textContent = `Done! Imported ${data.imported} bookmark${data.imported !== 1 ? "s" : ""}.`;
+            } else {
+              statusEl.textContent = `Importing ${data.imported}/${data.total}...`;
+            }
+          }
+        }
+      } catch (err) {
+        statusEl.textContent = "Error during import.";
+      } finally {
+        const btn = document.getElementById("importBtn");
+        btn.style.display = "";
+        btn.disabled = false;
+      }
+    }
 
     async function doSearch() {
       const q = document.getElementById("query").value.trim();
