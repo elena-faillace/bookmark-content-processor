@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl
 
-from database import databset_init, add_link, quality_check
-from embeddings import embed_and_store, extract_text, search as embedding_search
+from .database import databset_init, add_link, quality_check
+from .embeddings import embed_and_store, extract_text, search as embedding_search
 
 log_stream = StringIO()
 logging.basicConfig(stream=log_stream, level=logging.INFO)
@@ -39,7 +39,7 @@ class SaveRequest(BaseModel):
 
 @app.get("/")
 def serve_search_ui():
-    return FileResponse("search.html")
+    return FileResponse("ui/search.html")
 
 
 @app.post("/save")

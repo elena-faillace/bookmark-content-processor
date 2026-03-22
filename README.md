@@ -30,7 +30,7 @@ uv sync
 ### Local HTTP API (recommended)
 
 ```bash
-uvicorn api:app --reload --port 8000
+uvicorn app.api:app --reload --port 8000
 ```
 
 - API docs: http://localhost:8000/docs
@@ -82,15 +82,18 @@ curl "http://localhost:8000/search?q=machine+learning"
 
 ```
 LLM-links-app/
-├── api.py           # FastAPI server (HTTP endpoints)
-├── database.py      # SQLite operations
-├── embeddings.py    # Text extraction, embedding, and vector search
-├── main.py          # Legacy CLI interface
-├── search.html      # Search UI served by the API
+├── app/             # Python backend
+│   ├── api.py       # FastAPI server (HTTP endpoints)
+│   ├── database.py  # SQLite operations
+│   └── embeddings.py# Text extraction, embedding, and vector search
+├── ui/              # Frontend
+│   └── search.html  # Search UI served by the API
 ├── extension/       # Chrome extension (Manifest V3)
 │   ├── manifest.json
 │   ├── popup.html
 │   └── popup.js
+├── docs/            # Documentation
+│   └── GUIDE.md     # Full technical guide
 ├── bookmarks.db     # SQLite database (auto-created)
 └── chroma_db/       # Vector store (auto-created)
 ```
