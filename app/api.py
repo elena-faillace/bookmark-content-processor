@@ -7,8 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl
 
-from .database import databset_init, add_link, quality_check
-from .embeddings import embed_and_store, extract_text, search as embedding_search
+from .embeddings import embed_and_store, extract_text, quality_check, search as embedding_search, store_url_only
 
 log_stream = StringIO()
 logging.basicConfig(stream=log_stream, level=logging.INFO)
@@ -16,7 +15,7 @@ logging.basicConfig(stream=log_stream, level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    databset_init()
+    logging.info("Server starting up.")
     yield
     quality_check()
     with open("logged_messages.txt", "w", encoding="utf-8") as f:
@@ -45,13 +44,12 @@ def serve_search_ui():
 @app.post("/save")
 def save_url(body: SaveRequest):
     url = str(body.url)
-    add_link(url)
-
     text = extract_text(url)
     if text:
         embed_and_store(url, text)
         return {"status": "saved", "url": url, "embedded": True}
 
+    store_url_only(url)
     return {"status": "saved", "url": url, "embedded": False}
 
 

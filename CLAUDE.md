@@ -18,11 +18,9 @@ A bookmark manager with semantic search. Python 3.12+, managed with UV. Exposes 
 
 **Modules:**
 
-- `app/api.py` — FastAPI server. Two endpoints: `POST /save` (saves URL + triggers embedding), `GET /search?q=...` (semantic search). Serves `ui/search.html` at `GET /`. Calls `databset_init()` on startup and `quality_check()` on shutdown via lifespan.
+- `app/api.py` — FastAPI server. Two endpoints: `POST /save` (saves URL + triggers embedding), `GET /search?q=...` (semantic search). Serves `ui/search.html` at `GET /`. Calls `quality_check()` on shutdown via lifespan.
 
-- `app/database.py` — All SQLite operations (`bookmarks.db`). Functions: `databset_init()`, `add_link(url)`, `quality_check()`, `get_list_links()`. Uses a `@log_database_interactions` decorator. Quality check strips empty/null rows, removes duplicates, enforces `http` prefix.
-
-- `app/embeddings.py` — Text extraction and vector search. `extract_text(url)` uses trafilatura. `embed_and_store(url, text)` encodes with `all-MiniLM-L6-v2` and upserts into ChromaDB (`./chroma_db/`). `search(query, n)` returns top-N URLs by cosine similarity. Model and ChromaDB client are lazy singletons.
+- `app/embeddings.py` — All storage and search logic. `extract_text(url)` uses trafilatura. `embed_and_store(url, text)` encodes with `all-MiniLM-L6-v2` and upserts into ChromaDB (`./chroma_db/`) with `date` and `text_extracted` metadata. `store_url_only(url)` embeds the URL string itself as a fallback when text extraction fails. `quality_check()` removes non-http entries from ChromaDB on shutdown. `search(query, n)` returns top-N URLs by cosine similarity. Model and ChromaDB client are lazy singletons.
 
 - `ui/search.html` — Static search UI served by FastAPI at `GET /`.
 
@@ -30,13 +28,11 @@ A bookmark manager with semantic search. Python 3.12+, managed with UV. Exposes 
 
 - `docs/GUIDE.md` — Full technical guide explaining the app's flow and every technology choice.
 
-**Data flow:** Chrome extension → `POST /save` → `add_link()` → `bookmarks.db` + `embed_and_store()` → `chroma_db/`. Search: `GET /search?q=` → `embeddings.search()` → ChromaDB cosine query → ranked URLs.
+**Data flow:** Chrome extension → `POST /save` → `extract_text()` → success: `embed_and_store()` → `chroma_db/`; failure: `store_url_only()` → `chroma_db/`. Search: `GET /search?q=` → `embeddings.search()` → ChromaDB cosine query → ranked URLs.
 
 ## Stack
 
 - `fastapi` + `uvicorn` — HTTP server
-- `sqlite3` — bookmark storage (built-in)
 - `sentence-transformers` — local text embeddings (`all-MiniLM-L6-v2`)
-- `chromadb` — local vector database
+- `chromadb` — local vector database (sole storage layer)
 - `trafilatura` — web content extraction
-- `rich` — terminal formatting (used in `database.py` output)

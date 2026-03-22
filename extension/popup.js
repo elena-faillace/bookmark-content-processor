@@ -1,18 +1,18 @@
 const btn = document.getElementById("saveBtn");
-const status = document.getElementById("status");
+const statusEl = document.getElementById("status");
 
 btn.addEventListener("click", async () => {
   btn.disabled = true;
-  status.textContent = "Saving...";
-  status.className = "";
+  statusEl.textContent = "Saving...";
+  statusEl.className = "";
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const url = tab.url;
 
     if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
-      status.textContent = "Cannot save this page (no HTTP URL).";
-      status.className = "err";
+      statusEl.textContent = "Cannot save this page (no HTTP URL).";
+      statusEl.className = "err";
       btn.disabled = false;
       return;
     }
@@ -24,16 +24,16 @@ btn.addEventListener("click", async () => {
     });
 
     if (res.ok) {
-      status.textContent = "Saved!";
-      status.className = "ok";
+      statusEl.textContent = "Saved!";
+      statusEl.className = "ok";
     } else {
       const data = await res.json().catch(() => ({}));
-      status.textContent = `Error: ${data.detail || res.statusText}`;
-      status.className = "err";
+      statusEl.textContent = `Error: ${data.detail || res.statusText}`;
+      statusEl.className = "err";
     }
   } catch (err) {
-    status.textContent = "Could not reach the local server.";
-    status.className = "err";
+    statusEl.textContent = "Could not reach the local server.";
+    statusEl.className = "err";
   } finally {
     btn.disabled = false;
   }

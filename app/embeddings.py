@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 import trafilatura
 import chromadb
 from sentence_transformers import SentenceTransformer
@@ -52,11 +53,47 @@ def embed_and_store(url: str, text: str) -> None:
             ids=[url],
             embeddings=[embedding],
             documents=[text[:500]],  # store a snippet for reference
-            metadatas=[{"url": url}],
+            metadatas=[{"url": url, "date": datetime.now(timezone.utc).isoformat(), "text_extracted": True}],
         )
         logging.info("Embedded and stored: %s", url)
     except Exception as e:
         logging.error("embed_and_store error for %s: %s", url, e)
+
+
+def store_url_only(url: str) -> None:
+    """Store a URL with no extracted text. The URL string itself is embedded as fallback."""
+    try:
+        model = _get_model()
+        collection = _get_collection()
+        embedding = model.encode(url).tolist()
+        collection.upsert(
+            ids=[url],
+            embeddings=[embedding],
+            documents=[url],
+            metadatas=[{"url": url, "date": datetime.now(timezone.utc).isoformat(), "text_extracted": False}],
+        )
+        logging.info("Stored URL-only (no text extraction): %s", url)
+    except Exception as e:
+        logging.error("store_url_only error for %s: %s", url, e)
+
+
+def quality_check() -> None:
+    """Remove ChromaDB entries with empty or non-http URLs."""
+    try:
+        collection = _get_collection()
+        if collection.count() == 0:
+            return
+        results = collection.get(include=["metadatas"])
+        ids_to_delete = [
+            doc_id
+            for doc_id, meta in zip(results["ids"], results["metadatas"])
+            if not meta.get("url", "").startswith("http")
+        ]
+        if ids_to_delete:
+            collection.delete(ids=ids_to_delete)
+            logging.warning("quality_check: removed %d entries", len(ids_to_delete))
+    except Exception as e:
+        logging.error("quality_check error: %s", e)
 
 
 def search(query: str, n: int = 10) -> list[str]:

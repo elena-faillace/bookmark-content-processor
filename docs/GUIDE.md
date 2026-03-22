@@ -10,13 +10,12 @@ This document walks through every part of the app.
 2. [The two journeys: Save and Search](#2-the-two-journeys-save-and-search)
 3. [The Chrome extension — where everything starts](#3-the-chrome-extension--where-everything-starts)
 4. [The API server — the brain of the app](#4-the-api-server--the-brain-of-the-app)
-5. [The database layer — storing raw URLs](#5-the-database-layer--storing-raw-urls)
-6. [The embedding pipeline — teaching the app to understand meaning](#6-the-embedding-pipeline--teaching-the-app-to-understand-meaning)
-7. [The search UI — asking questions](#7-the-search-ui--asking-questions)
-8. [How the pieces fit together: data flow diagrams](#8-how-the-pieces-fit-together-data-flow-diagrams)
-9. [Why each technology was chosen](#9-why-each-technology-was-chosen)
-10. [Key concepts explained](#10-key-concepts-explained)
-11. [Running the server automatically on login](#11-running-the-server-automatically-on-login)
+5. [The storage and embedding pipeline](#5-the-storage-and-embedding-pipeline)
+6. [The search UI — asking questions](#6-the-search-ui--asking-questions)
+7. [How the pieces fit together: data flow diagrams](#7-how-the-pieces-fit-together-data-flow-diagrams)
+8. [Why each technology was chosen](#8-why-each-technology-was-chosen)
+9. [Key concepts explained](#9-key-concepts-explained)
+10. [Running the server automatically on login](#10-running-the-server-automatically-on-login)
 
 ---
 
@@ -27,15 +26,13 @@ The app is a **personal bookmark manager with semantic search**. The core idea: 
 There are four components that talk to each other:
 
 ```
-[Chrome Extension]  →  [FastAPI Server]  →  [SQLite database]
-                                        →  [ChromaDB vector store]
-                    ←  [Search UI]      ←  [ChromaDB vector store]
+[Chrome Extension]  →  [FastAPI Server]  →  [ChromaDB]
+                    ←  [Search UI]      ←  [ChromaDB]
 ```
 
 - **Chrome Extension** (`extension/`) — the button you click to save a page
 - **FastAPI Server** (`api.py`) — receives requests, coordinates all the work
-- **SQLite database** (`bookmarks.db`) — stores the raw URLs + timestamps
-- **ChromaDB vector store** (`chroma_db/`) — stores the *meaning* of each page so you can search by concept
+- **ChromaDB** (`chroma_db/`) — the single database: stores the URL, timestamp, and the *meaning* of each page as a vector
 - **Search UI** (`search.html`) — a web page where you type queries and see results
 
 These all run **locally on your machine**. Nothing is sent to any cloud service.
@@ -52,10 +49,9 @@ The entire app exists to serve two actions:
 
 1. You click the extension button in Chrome
 2. The extension reads the current URL and sends it to the local server
-3. The server saves the URL to the SQLite database
-4. The server fetches the full text content of the page
-5. That text is converted into a vector
-6. The vector is saved to ChromaDB alongside the URL
+3. The server fetches the full text content of the page
+4. If extraction succeeds: the text is converted into a vector and stored in ChromaDB with a timestamp
+5. If extraction fails (login-walled page, bot-blocked, no text): the URL itself is embedded and stored as a fallback — the bookmark is still saved and URL-searchable
 
 ### Searching bookmarks
 
@@ -142,7 +138,7 @@ FastAPI is a Python library for building HTTP servers. An HTTP server is a progr
 ```python
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    databset_init()
+    logging.info("Server starting up.")
     yield
     quality_check()
     with open("logged_messages.txt", "w") as f:
@@ -151,8 +147,8 @@ async def lifespan(app: FastAPI):
 
 This is a **lifespan** function — code that runs when the server starts and when it stops.
 
-- Everything **before** `yield` runs at startup: `databset_init()` creates the SQLite table if it doesn't exist yet
-- Everything **after** `yield` runs at shutdown: `quality_check()` cleans dirty data, logs are written to a file
+- Everything **before** `yield` runs at startup: just a log message — ChromaDB creates its collection lazily on first use, so no explicit initialisation is needed
+- Everything **after** `yield` runs at shutdown: `quality_check()` removes any invalid entries from ChromaDB, logs are written to a file
 
 `@asynccontextmanager` is a decorator that turns this function into a context manager — a pattern for "set up, do work, tear down".
 
@@ -183,21 +179,18 @@ class SaveRequest(BaseModel):
 @app.post("/save")
 def save_url(body: SaveRequest):
     url = str(body.url)
-    add_link(url)
-
     text = extract_text(url)
     if text:
         embed_and_store(url, text)
         return {"status": "saved", "url": url, "embedded": True}
 
+    store_url_only(url)
     return {"status": "saved", "url": url, "embedded": False}
 ```
 
-This endpoint does two things in sequence:
-1. **Always** save the URL to SQLite (via `add_link`)
-2. **Try** to extract text and embed it — if the page is unreachable or has no extractable text, the URL is still saved, just not searchable
+This endpoint tries to extract and embed the page content. If extraction succeeds, the full text embedding is stored. If it fails (page behind login, no text content, bot-blocked), `store_url_only` is called instead — the URL itself is embedded so the bookmark is still saved and searchable by URL string.
 
-The response tells the caller whether embedding happened. `embedded: False` is not an error — the URL is still recorded.
+The response tells the caller whether full content embedding happened. `embedded: False` is not an error — the bookmark is still recorded in ChromaDB.
 
 ### GET /search — api.py:58–63
 
@@ -212,72 +205,13 @@ def search_urls(q: str = Query(..., min_length=1)):
 
 ---
 
-## 5. The database layer — storing raw URLs
-
-**File:** `database.py`
-
-### What SQLite is
-
-SQLite is a database that lives in a single file (`bookmarks.db`). Unlike databases like PostgreSQL or MySQL, it has no separate server process — the Python code reads and writes the file directly. This makes it perfect for local, single-user apps where simplicity matters more than scalability.
-
-### The table schema — database.py:37–43
-
-```sql
-CREATE TABLE IF NOT EXISTS links (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    Date DATE DEFAULT CURRENT_TIMESTAMP,
-    URL TEXT
-)
-```
-
-The `links` table has three columns:
-- `id` — a unique number assigned automatically to each row (AUTOINCREMENT)
-- `Date` — the timestamp when the URL was saved, filled in automatically
-- `URL` — the actual URL text
-
-`CREATE TABLE IF NOT EXISTS` means this is safe to run every time the server starts — it only creates the table if it doesn't already exist.
-
-### The decorator — database.py:8–23
-
-```python
-def log_database_interactions(func):
-    def wrapper(*args, **kwargs):
-        if func.__name__ == "databset_init":
-            logging.info("Initializing the database...")
-        ...
-        result = func(*args, **kwargs)
-        return result
-    return wrapper
-```
-
-A **decorator** is a function that wraps another function to add behaviour before or after it runs, without modifying the original function's code. Here it logs what operation is about to happen before executing the actual database function. `@log_database_interactions` above a function definition applies the decorator.
-
-### Parameterised queries — database.py:64–68
-
-```python
-cur.execute('''
-    INSERT INTO links (Date, URL) VALUES (CURRENT_TIMESTAMP, ?)
-''', (url,))
-```
-
-The `?` is a placeholder, not string interpolation. The database driver substitutes the value safely. This prevents **SQL injection** — if a URL contained SQL code (e.g. `'; DROP TABLE links; --`), the `?` approach treats it as literal text, not executable SQL.
-
-### Quality check — database.py:81–147
-
-This runs at shutdown and performs three cleanup passes using SQL queries:
-1. Delete rows where `URL IS NULL OR URL = ''`
-2. Delete duplicate rows (keep only the earliest entry per URL, identified by the minimum `id`)
-3. Delete rows where `URL NOT LIKE 'http%'` (not a valid web URL)
-
-The duplicates query uses a subquery: it first finds the minimum `id` for each unique URL, then deletes everything not in that set.
-
----
-
-## 6. The embedding pipeline — teaching the app to understand meaning
+## 5. The storage and embedding pipeline
 
 **File:** `embeddings.py`
 
-This is the most conceptually novel part of the app. Understanding it requires understanding what "embeddings" are.
+This file handles everything: text extraction, vector embedding, storage, search, and cleanup. ChromaDB is the only database — there is no SQLite.
+
+This is also the most conceptually novel part of the app. Understanding it requires understanding what "embeddings" are.
 
 ### What an embedding is
 
@@ -292,7 +226,7 @@ The model (`all-MiniLM-L6-v2`) was trained on massive amounts of text to learn t
 
 The vector has 384 dimensions (numbers). You can think of it as a point in 384-dimensional space.
 
-### Step 1: Text extraction — embeddings.py:28–42
+### Step 1: Text extraction
 
 ```python
 def extract_text(url: str) -> str | None:
@@ -305,9 +239,9 @@ def extract_text(url: str) -> str | None:
 
 This is important because embedding the full raw HTML would pollute the vector with irrelevant content. You want the embedding to represent the *meaning* of the page, not its structure.
 
-If extraction fails (the page is behind a login, blocks bots, or has no text content), `None` is returned and the URL is still saved to SQLite — just without a searchable embedding.
+If extraction fails (the page is behind a login, blocks bots, or has no text content), `None` is returned and `api.py` calls `store_url_only` instead.
 
-### Step 2: Computing the embedding — embeddings.py:45–58
+### Step 2a: Embedding extracted text
 
 ```python
 def embed_and_store(url: str, text: str) -> None:
@@ -318,7 +252,7 @@ def embed_and_store(url: str, text: str) -> None:
         ids=[url],
         embeddings=[embedding],
         documents=[text[:500]],
-        metadatas=[{"url": url}],
+        metadatas=[{"url": url, "date": datetime.now(timezone.utc).isoformat(), "text_extracted": True}],
     )
 ```
 
@@ -326,7 +260,24 @@ def embed_and_store(url: str, text: str) -> None:
 
 `collection.upsert()` means "insert if new, update if already exists". The URL is used as the unique ID — so saving the same URL twice just updates the entry instead of creating a duplicate.
 
-The first 500 characters of the text are also stored as a `document` — this is a human-readable snippet for reference, not used in search calculations.
+Each entry stores a `date` (ISO 8601 timestamp) and a `text_extracted` flag in metadata.
+
+### Step 2b: URL-only fallback
+
+```python
+def store_url_only(url: str) -> None:
+    model = _get_model()
+    collection = _get_collection()
+    embedding = model.encode(url).tolist()
+    collection.upsert(
+        ids=[url],
+        embeddings=[embedding],
+        documents=[url],
+        metadatas=[{"url": url, "date": ..., "text_extracted": False}],
+    )
+```
+
+When text extraction fails, the URL string itself is embedded. This means the bookmark is still stored in ChromaDB and will surface in searches that match the URL text (e.g. searching "github" will find `github.com` URLs). The `text_extracted: False` flag records that no page content was available.
 
 ### The singleton pattern — embeddings.py:6–25
 
@@ -344,7 +295,7 @@ Loading the ML model takes a few seconds and uses significant memory. The single
 
 The same pattern is used for the ChromaDB collection (`_get_collection()`).
 
-### Step 3: Searching — embeddings.py:62–77
+### Step 3: Searching
 
 ```python
 def search(query: str, n: int = 10) -> list[str]:
@@ -378,7 +329,7 @@ You could technically store vectors in SQLite as binary blobs, but you'd have to
 
 ---
 
-## 7. The search UI — asking questions
+## 6. The search UI — asking questions
 
 **File:** `search.html`
 
@@ -396,7 +347,7 @@ No frameworks, no build tools — plain HTML and JavaScript. This keeps it simpl
 
 ---
 
-## 8. How the pieces fit together: data flow diagrams
+## 7. How the pieces fit together: data flow diagrams
 
 ### Saving a URL
 
@@ -412,19 +363,20 @@ fetch POST localhost:8000/save  { url: "https://example.com" }
         ▼
 api.py: save_url()
         │
-        ├──► add_link(url)          ─────► INSERT INTO links ... ─► bookmarks.db
-        │         (database.py)               (SQLite)
-        │
-        ├──► extract_text(url)      ─────► trafilatura fetches page
-        │         (embeddings.py)            strips to main text
-        │                                    returns plain string
-        │
-        └──► embed_and_store(url, text)
-                  (embeddings.py)
+        └──► extract_text(url)      ─────► trafilatura fetches page
+                  (embeddings.py)            strips to main text
                        │
-                       ├──► model.encode(text)   ─► 384 numbers (vector)
+                       ├── success ──► embed_and_store(url, text)
+                       │                    │
+                       │                    ├──► model.encode(text)  ─► 384-dim vector
+                       │                    └──► collection.upsert() ─► chroma_db/ (disk)
+                       │                         metadata: {url, date, text_extracted: true}
                        │
-                       └──► collection.upsert()  ─► chroma_db/ (disk)
+                       └── failure ──► store_url_only(url)
+                                            │
+                                            ├──► model.encode(url)   ─► 384-dim vector
+                                            └──► collection.upsert() ─► chroma_db/ (disk)
+                                                 metadata: {url, date, text_extracted: false}
         │
         ▼
 Response: { "status": "saved", "embedded": true/false }
@@ -471,16 +423,15 @@ search.html renders list of clickable links
 
 ---
 
-## 9. Why each technology was chosen
+## 8. Why each technology was chosen
 
 | Technology | What it does | Why this one |
 |------------|-------------|-------------|
 | **FastAPI** | HTTP server | Automatic request validation via Pydantic, auto-generated docs at `/docs`, minimal boilerplate |
 | **uvicorn** | Runs the FastAPI app | The standard ASGI server for FastAPI; `--reload` restarts the server when you edit code |
-| **SQLite** | Stores raw URLs | Built into Python, zero configuration, single file — perfect for local single-user data |
 | **trafilatura** | Extracts page text | Purpose-built for web content extraction; handles boilerplate removal better than raw HTML parsing |
 | **sentence-transformers** | Converts text to vectors | `all-MiniLM-L6-v2` is ~80MB, runs on CPU in milliseconds, purpose-built for semantic similarity |
-| **ChromaDB** | Stores and queries vectors | Local-first, zero config, handles cosine similarity search with fast indexing |
+| **ChromaDB** | Single database: stores URLs, timestamps, and vectors | Local-first, zero config, handles cosine similarity search with fast indexing; URL-as-ID gives free deduplication |
 | **Chrome Extension MV3** | Saves current tab | The only way to read the active tab URL and trigger local computation from within Chrome |
 | **Pydantic** | Validates API inputs | Built into FastAPI; catches bad inputs before they reach your code |
 
@@ -488,15 +439,13 @@ search.html renders list of clickable links
 
 The BART and FLAN-T5 models explored earlier are **generative** models — they produce text. For search, you don't need generation; you need **similarity comparison**. `all-MiniLM-L6-v2` is a **sentence encoder** specifically trained for this: map two pieces of text to vectors and check how close they are. It's 100x faster and more appropriate for the task.
 
-### Why two databases (SQLite + ChromaDB)?
+### Why only one database (ChromaDB)?
 
-They serve different purposes:
-- **SQLite** is the source of truth for your bookmarks. It stores the URL and when you saved it. It's simple, reliable, and queryable with standard SQL.
-- **ChromaDB** stores the *semantic meaning* of each page as a vector. This is completely separate data — if ChromaDB were deleted, you'd lose search capability but not your bookmarks. You could also rebuild the vectors from the SQLite URLs at any time.
+ChromaDB stores the URL (as the document ID), the semantic vector, a text snippet, and metadata including the timestamp. This covers everything the app needs. Using the URL as the ID gives free deduplication — upserting the same URL twice just updates the entry. A second database (SQLite) would only add complexity and create the risk of the two stores drifting out of sync.
 
 ---
 
-## 10. Key concepts explained
+## 9. Key concepts explained
 
 ### HTTP and REST
 
@@ -524,7 +473,7 @@ Imagine two arrows pointing from the origin. Cosine similarity measures the cosi
 
 ---
 
-## 11. Running the server automatically on login
+## 10. Running the server automatically on login
 
 By default you have to start the server manually in a terminal each time. macOS has a built-in system called **launchd** that can run the server automatically at login and restart it if it ever crashes — so you never have to touch a terminal for this again.
 
@@ -603,17 +552,3 @@ At idle the server uses essentially no resources:
 
 The ML model (`all-MiniLM-L6-v2`) loads into memory the first time you save or search — not at server startup. After that it stays in RAM so subsequent saves are fast. On a Mac with 8 GB+ RAM, 250 MB is a rounding error — comparable to one Chrome tab.
 
-### The `finally` block
-
-```python
-try:
-    conn = sqlite3.connect(...)
-    ...
-except sqlite3.Error as error:
-    ...
-finally:
-    if conn:
-        conn.close()
-```
-
-`finally` runs **regardless** of whether an exception was raised. This guarantees the database connection is always closed, even if something went wrong halfway through. Unclosed connections can cause resource leaks or lock the database file.
