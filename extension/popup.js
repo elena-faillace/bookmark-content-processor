@@ -9,6 +9,7 @@ btn.addEventListener("click", async () => {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const url = tab.url;
+    const title = tab.title || "";
 
     if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
       statusEl.textContent = "Cannot save this page (no HTTP URL).";
@@ -20,7 +21,7 @@ btn.addEventListener("click", async () => {
     const res = await fetch("http://localhost:8484/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, title }),
     });
 
     if (res.ok) {

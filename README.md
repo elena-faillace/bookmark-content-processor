@@ -21,6 +21,7 @@ Save web pages with one click and find them later using natural language queries
 git clone <repo-url>
 cd bookmark-content-processor
 uv sync
+uv sync --group dev  # for running tests
 ```
 
 ---
@@ -87,6 +88,8 @@ bookmark-content-processor/
 │   └── popup.js
 ├── docs/            # Documentation
 │   └── GUIDE.md     # Full technical guide
+├── tests/           # pytest test suite
+│   └── test_api.py
 └── chroma_db/       # Vector store (auto-created)
 ```
 
@@ -98,5 +101,7 @@ bookmark-content-processor/
 |---------|---------|
 | `fastapi` + `uvicorn` | HTTP server |
 | `sentence-transformers` | Local text embeddings (`all-MiniLM-L6-v2`, ~80MB) |
-| `chromadb` | Local vector database (sole storage layer) |
+| `chromadb` | Local vector database for bookmarks |
+| `sqlite3` | Request log storage (`logs.db`, built-in) |
 | `trafilatura` | Web page content extraction |
+| `pytest` + `httpx` | Testing (dev) |

@@ -58,10 +58,19 @@
     .result-item a {
       color: #88c0d0;
       text-decoration: none;
-      word-break: break-all;
       font-size: 0.95rem;
+      font-weight: 500;
+      display: block;
     }
     .result-item a:hover { text-decoration: underline; }
+    .result-url {
+      font-size: 0.78rem;
+      color: #555;
+      margin-top: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .empty { color: #666; text-align: center; margin-top: 20px; }
   </style>
 </head>
@@ -97,8 +106,11 @@
 
         container.innerHTML = data.results
           .map(
-            (url, i) =>
-              `<div class="result-item"><span style="color:#666;margin-right:8px">${i + 1}.</span><a href="${url}" target="_blank" rel="noopener">${url}</a></div>`
+            ({ url, title }, i) =>
+              `<div class="result-item">
+                <span style="color:#666;margin-right:8px">${i + 1}.</span><a href="${url}" target="_blank" rel="noopener">${title || url}</a>
+                <div class="result-url">${url}</div>
+              </div>`
           )
           .join("");
       } catch (err) {

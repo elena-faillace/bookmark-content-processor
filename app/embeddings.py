@@ -43,7 +43,7 @@ def extract_text(url: str) -> str | None:
         return None
 
 
-def embed_and_store(url: str, text: str) -> None:
+def embed_and_store(url: str, text: str, title: str = "") -> None:
     """Embed text and store the vector in ChromaDB keyed by URL."""
     try:
         model = _get_model()
@@ -53,14 +53,14 @@ def embed_and_store(url: str, text: str) -> None:
             ids=[url],
             embeddings=[embedding],
             documents=[text[:500]],  # store a snippet for reference
-            metadatas=[{"url": url, "date": datetime.now(timezone.utc).isoformat(), "text_extracted": True}],
+            metadatas=[{"url": url, "title": title, "date": datetime.now(timezone.utc).isoformat(), "text_extracted": True}],
         )
         logging.info("Embedded and stored: %s", url)
     except Exception as e:
         logging.error("embed_and_store error for %s: %s", url, e)
 
 
-def store_url_only(url: str) -> None:
+def store_url_only(url: str, title: str = "") -> None:
     """Store a URL with no extracted text. The URL string itself is embedded as fallback."""
     try:
         model = _get_model()
@@ -70,7 +70,7 @@ def store_url_only(url: str) -> None:
             ids=[url],
             embeddings=[embedding],
             documents=[url],
-            metadatas=[{"url": url, "date": datetime.now(timezone.utc).isoformat(), "text_extracted": False}],
+            metadatas=[{"url": url, "title": title, "date": datetime.now(timezone.utc).isoformat(), "text_extracted": False}],
         )
         logging.info("Stored URL-only (no text extraction): %s", url)
     except Exception as e:
@@ -96,8 +96,8 @@ def quality_check() -> None:
         logging.error("quality_check error: %s", e)
 
 
-def search(query: str, n: int = 10) -> list[str]:
-    """Return top-N URLs whose content is most similar to the query."""
+def search(query: str, n: int = 10) -> list[dict]:
+    """Return top-N results (url + title) whose content is most similar to the query."""
     try:
         model = _get_model()
         collection = _get_collection()
@@ -108,7 +108,7 @@ def search(query: str, n: int = 10) -> list[str]:
             query_embeddings=[query_embedding],
             n_results=min(n, collection.count()),
         )
-        return [meta["url"] for meta in results["metadatas"][0]]
+        return [{"url": meta["url"], "title": meta.get("title", "")} for meta in results["metadatas"][0]]
     except Exception as e:
         logging.error("search error: %s", e)
         return []
