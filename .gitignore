@@ -1,7 +1,9 @@
 # Added by ELENA
 .DS_Store
 logged_messages.txt
+logs.db
 bookmarks.db
+chroma_db/
 list_bookmarks.txt
 
 # Byte-compiled / optimized / DLL files
