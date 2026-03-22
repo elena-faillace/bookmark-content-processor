@@ -1,6 +1,6 @@
 # How this app works — a study guide
 
-This document walks through every part of the app from first principles. No prior knowledge assumed.
+This document walks through every part of the app.
 
 ---
 

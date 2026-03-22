@@ -1,4 +1,4 @@
-# LLM Links App — Bookmark Manager with Semantic Search
+# bookmark-content-processor
 
 Save web pages with one click and find them later using natural language queries. Built with a local Python backend, SQLite, and a vector database — no cloud required.
 
@@ -19,7 +19,7 @@ Save web pages with one click and find them later using natural language queries
 ```bash
 # Clone and install dependencies
 git clone <repo-url>
-cd LLM-links-app
+cd bookmark-content-processor
 uv sync
 ```
 
@@ -36,12 +36,6 @@ uvicorn app.api:app --reload --port 8000
 - API docs: http://localhost:8000/docs
 - Search UI: http://localhost:8000
 
-### CLI (legacy)
-
-```bash
-python main.py
-```
-
 ---
 
 ## Chrome Extension
@@ -51,7 +45,7 @@ python main.py
 3. Click **Load unpacked** → select the `extension/` folder
 4. Click the extension icon on any page → **Save this page**
 
-> The local server must be running (`uvicorn api:app --port 8000`) for the extension to work.
+> The local server must be running (`uvicorn app.api:app --port 8000`) for the extension to work.
 
 ---
 
@@ -81,7 +75,7 @@ curl "http://localhost:8000/search?q=machine+learning"
 ## Project Structure
 
 ```
-LLM-links-app/
+bookmark-content-processor/
 ├── app/             # Python backend
 │   ├── api.py       # FastAPI server (HTTP endpoints)
 │   ├── database.py  # SQLite operations
