@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.bookmark-processor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/elenafaillace/.local/bin/uv</string>
+        <string>run</string>
+        <string>uvicorn</string>
+        <string>app.api:app</string>
+        <string>--port</string>
+        <string>8000</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/elenafaillace/Documents/all_code/bookmark-content-processor</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/elenafaillace/Library/Logs/bookmark-processor/server.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/elenafaillace/Library/Logs/bookmark-processor/server.error.log</string>
+</dict>
+</plist>

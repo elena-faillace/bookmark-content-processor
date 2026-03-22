@@ -16,6 +16,7 @@ This document walks through every part of the app.
 8. [How the pieces fit together: data flow diagrams](#8-how-the-pieces-fit-together-data-flow-diagrams)
 9. [Why each technology was chosen](#9-why-each-technology-was-chosen)
 10. [Key concepts explained](#10-key-concepts-explained)
+11. [Running the server automatically on login](#11-running-the-server-automatically-on-login)
 
 ---
 
@@ -51,9 +52,9 @@ The entire app exists to serve two actions:
 
 1. You click the extension button in Chrome
 2. The extension reads the current URL and sends it to the local server
-3. The server saves the URL to the SQLite database (so it's never lost)
+3. The server saves the URL to the SQLite database
 4. The server fetches the full text content of the page
-5. That text is converted into a vector (a list of numbers that captures the meaning)
+5. That text is converted into a vector
 6. The vector is saved to ChromaDB alongside the URL
 
 ### Searching bookmarks
@@ -520,6 +521,87 @@ Imagine two arrows pointing from the origin. Cosine similarity measures the cosi
 ### Async vs sync
 
 `async def` and `await` are Python keywords for **asynchronous** code. Normally, when Python waits for something (a network request, a database query), it blocks — nothing else can run. Async allows the program to handle other requests while waiting. FastAPI supports both async and regular (`def`) functions. The current code uses regular `def` endpoints, which FastAPI runs in a thread pool automatically.
+
+---
+
+## 11. Running the server automatically on login
+
+By default you have to start the server manually in a terminal each time. macOS has a built-in system called **launchd** that can run the server automatically at login and restart it if it ever crashes — so you never have to touch a terminal for this again.
+
+A **launch agent** is a small configuration file (`.plist` format — Apple's XML variant for settings) that tells launchd what to run, where to run it, and what to do if it exits. The file lives in `~/Library/LaunchAgents/` and macOS reads it at login.
+
+The plist template is already in this repo at `launchd/com.bookmark-processor.plist`.
+
+### One-time setup
+
+```bash
+# 1. Copy the plist to the LaunchAgents folder
+cp launchd/com.bookmark-processor.plist ~/Library/LaunchAgents/
+
+# 2. Create the log directory
+mkdir -p ~/Library/Logs/bookmark-processor
+
+# 3. Load it (registers it with launchd and starts it immediately)
+launchctl load ~/Library/LaunchAgents/com.bookmark-processor.plist
+
+# 4. Verify it started — you should see a PID in the first column
+launchctl list | grep bookmark
+```
+
+If the first column shows `-` instead of a number, the server failed to start. Check why:
+
+```bash
+cat ~/Library/Logs/bookmark-processor/server.error.log
+```
+
+### Day-to-day control
+
+```bash
+# Stop the server
+launchctl stop com.bookmark-processor
+
+# Start it again
+launchctl start com.bookmark-processor
+
+# Remove it entirely (also stops the auto-start on login)
+launchctl unload ~/Library/LaunchAgents/com.bookmark-processor.plist
+```
+
+### What the plist does
+
+```xml
+<key>RunAtLoad</key><true/>
+```
+Starts the server as soon as macOS loads the agent (i.e. at login).
+
+```xml
+<key>KeepAlive</key><true/>
+```
+If the server process exits for any reason (crash, exception), launchd restarts it automatically.
+
+```xml
+<key>WorkingDirectory</key>
+<string>/Users/elenafaillace/Documents/all_code/bookmark-content-processor</string>
+```
+Runs the command from inside the project folder, which is required because the server opens `bookmarks.db` and `chroma_db/` using relative paths.
+
+```xml
+<key>StandardOutPath</key>
+<key>StandardErrorPath</key>
+```
+Redirect the server's terminal output to log files in `~/Library/Logs/bookmark-processor/`. This replaces what you'd normally see printed in the terminal.
+
+### Performance impact
+
+At idle the server uses essentially no resources:
+
+| State | CPU | RAM |
+|---|---|---|
+| Server running, nothing happening | ~0% | ~50 MB |
+| After first save/search (ML model loaded) | ~0% | ~200–250 MB |
+| During a save (embedding running) | brief spike, ~1–3 sec | same |
+
+The ML model (`all-MiniLM-L6-v2`) loads into memory the first time you save or search — not at server startup. After that it stays in RAM so subsequent saves are fast. On a Mac with 8 GB+ RAM, 250 MB is a rounding error — comparable to one Chrome tab.
 
 ### The `finally` block
 
