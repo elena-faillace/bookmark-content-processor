@@ -131,7 +131,7 @@ Extensions are defined by `manifest.json`, which tells the browser:
 - `browser_specific_settings.gecko.id` is required by Firefox to identify the extension; Chrome ignores it
 - Firefox requires `"http://localhost:8484/*"` in `permissions` to allow `fetch` calls to the local server — `http://localhost/*` is not enough because Firefox only matches port 80 (the default) unless the port is made explicit; Chrome does not enforce this for localhost
 
-The JavaScript (`popup.js`) is identical for both. Firefox maps the `chrome.*` namespace to its own `browser.*` API automatically, so the same code works in both browsers without any changes.
+The JavaScript (`popup.js`) differs in one line: Chrome uses `chrome.tabs.query()` while Firefox uses `browser.tabs.query()`. Firefox does expose a `chrome.*` compatibility shim, but in MV2 it doesn't return a Promise for `chrome.tabs.query()` — so `await` gets `undefined` instead of an array. The native `browser.*` API is always Promise-based and is the correct choice for Firefox.
 
 ### popup.js — the logic (popup.js:4–40)
 

@@ -7,7 +7,7 @@ btn.addEventListener("click", async () => {
   statusEl.className = "";
 
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     const url = tab.url;
     const title = tab.title || "";
 
