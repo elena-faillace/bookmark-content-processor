@@ -8,7 +8,7 @@ This document walks through every part of the app.
 
 1. [The big picture](#1-the-big-picture)
 2. [The two journeys: Save and Search](#2-the-two-journeys-save-and-search)
-3. [The Chrome extension — where everything starts](#3-the-chrome-extension--where-everything-starts)
+3. [The browser extensions — where everything starts](#3-the-browser-extensions--where-everything-starts)
 4. [The API server — the brain of the app](#4-the-api-server--the-brain-of-the-app)
 5. [The storage and embedding pipeline](#5-the-storage-and-embedding-pipeline)
 6. [The search UI — asking questions](#6-the-search-ui--asking-questions)
@@ -26,11 +26,11 @@ The app is a **personal bookmark manager with semantic search**. The core idea: 
 There are four components that talk to each other:
 
 ```
-[Chrome Extension]  →  [FastAPI Server]  →  [ChromaDB]
-                    ←  [Search UI]      ←  [ChromaDB]
+[Browser Extension]  →  [FastAPI Server]  →  [ChromaDB]
+                     ←  [Search UI]       ←  [ChromaDB]
 ```
 
-- **Chrome Extension** (`extension/`) — the button you click to save a page
+- **Browser Extension** (`extension-chrome/` or `extension-firefox/`) — the button you click to save a page
 - **FastAPI Server** (`api.py`) — receives requests, coordinates all the work
 - **ChromaDB** (`chroma_db/`) — the single database: stores the URL, timestamp, and the *meaning* of each page as a vector
 - **Search UI** (`search.html`) — a web page where you type queries and see results
@@ -66,37 +66,73 @@ The key insight: **both the saved pages and the query are converted to the same 
 
 ---
 
-## 3. The Chrome extension — where everything starts
+## 3. The browser extensions — where everything starts
 
-**Files:** `extension/manifest.json`, `extension/popup.html`, `extension/popup.js`
+There are two extensions — one for Chrome, one for Firefox — in `extension-chrome/` and `extension-firefox/`. They share identical `popup.html` and `popup.js`; only the `manifest.json` differs between them.
 
-### What a Chrome extension is
+### Installing in Chrome
 
-A Chrome extension is a small web app (HTML + JavaScript) that Chrome loads directly from a folder on your computer. It can access browser internals — like the current tab's URL — that a normal website cannot.
+1. Open `chrome://extensions` in Chrome
+2. Enable **Developer mode** (toggle in the top-right corner)
+3. Click **Load unpacked**
+4. Select the `extension-chrome/` folder inside this repo
+5. The "Bookmark Saver" icon appears in your toolbar (you may need to pin it via the puzzle-piece menu)
 
-Extensions are defined by `manifest.json`, which tells Chrome:
+### Installing in Firefox
+
+Firefox requires a few extra steps because it does not allow loading unpacked extensions permanently — only as temporary add-ons that last until the browser restarts.
+
+**To load it temporarily (for testing):**
+
+1. Open `about:debugging` in Firefox
+2. Click **This Firefox** in the left sidebar
+3. Click **Load Temporary Add-on...**
+4. Navigate to the `extension-firefox/` folder and select the `manifest.json` file (not the folder itself — Firefox requires you to pick a specific file)
+5. The "Bookmark Saver" icon appears in your toolbar
+
+The extension will be removed the next time Firefox restarts. To make it persistent, you would need to sign it through Mozilla's Add-on Developer Hub — but for local personal use, re-loading it when needed is the practical approach.
+
+**Common Firefox pitfalls:**
+
+- **Selecting the folder instead of the file** — Firefox's file picker requires you to select `manifest.json` inside the folder, not the folder itself. Chrome is the opposite (it wants the folder).
+- **"Manifest version 3 is not supported"** — this is why the Firefox extension uses `manifest_version: 2`. If you see this, you may have accidentally loaded the `extension-chrome/` folder in Firefox.
+- **Icon missing after restart** — expected; temporary add-ons don't survive restarts. Re-load via `about:debugging`.
+
+### What a browser extension is
+
+A browser extension is a small web app (HTML + JavaScript) that the browser loads directly from a folder on your computer. It can access browser internals — like the current tab's URL — that a normal website cannot.
+
+Extensions are defined by `manifest.json`, which tells the browser:
 - What the extension is called
 - What permissions it needs
 - Which HTML file to show when clicked
 
-### manifest.json
+### Why the two manifests differ
 
 ```json
+// extension-chrome/manifest.json (Manifest V3)
 {
   "manifest_version": 3,
-  "permissions": ["activeTab", "tabs"],
-  "action": {
-    "default_popup": "popup.html"
-  }
+  "action": { "default_popup": "popup.html" }
 }
 ```
 
-- `manifest_version: 3` — the current (modern) version of the Chrome extension API
-- `"activeTab"` — permission to read information about the tab the user is currently on
-- `"tabs"` — permission to query the browser's tab list
-- `"default_popup"` — when the user clicks the extension icon, show `popup.html`
+```json
+// extension-firefox/manifest.json (Manifest V2)
+{
+  "manifest_version": 2,
+  "browser_action": { "default_popup": "popup.html" },
+  "browser_specific_settings": { "gecko": { "id": "bookmark-saver@localhost" } }
+}
+```
 
-### popup.js — the logic (extension/popup.js:4–40)
+- Chrome uses Manifest V3 (`action`) — the current standard
+- Firefox uses Manifest V2 (`browser_action`) — Firefox's MV3 support is still incomplete, so V2 is more reliable
+- `browser_specific_settings.gecko.id` is required by Firefox to identify the extension; Chrome ignores it
+
+The JavaScript (`popup.js`) is identical for both. Firefox maps the `chrome.*` namespace to its own `browser.*` API automatically, so the same code works in both browsers without any changes.
+
+### popup.js — the logic (popup.js:4–40)
 
 ```js
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
