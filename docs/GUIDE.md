@@ -129,6 +129,7 @@ Extensions are defined by `manifest.json`, which tells the browser:
 - Chrome uses Manifest V3 (`action`) — the current standard
 - Firefox uses Manifest V2 (`browser_action`) — Firefox's MV3 support is still incomplete, so V2 is more reliable
 - `browser_specific_settings.gecko.id` is required by Firefox to identify the extension; Chrome ignores it
+- Firefox requires `"http://localhost/*"` in `permissions` to allow `fetch` calls to the local server; Chrome does not enforce this for localhost
 
 The JavaScript (`popup.js`) is identical for both. Firefox maps the `chrome.*` namespace to its own `browser.*` API automatically, so the same code works in both browsers without any changes.
 

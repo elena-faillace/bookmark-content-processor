@@ -3,7 +3,7 @@
   "name": "Bookmark Saver",
   "version": "1.0",
   "description": "Save the current page to your local bookmarks server.",
-  "permissions": ["activeTab", "tabs"],
+  "permissions": ["activeTab", "tabs", "http://localhost/*"],
   "browser_specific_settings": {
     "gecko": {
       "id": "bookmark-saver@localhost"
