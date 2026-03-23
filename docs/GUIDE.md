@@ -480,10 +480,9 @@ This server is managed by **Supervisor**, configured in a separate `local-servic
 See the `local-services` repo at `~/Documents/all_code/local-services/` for one-time setup instructions. The short version:
 
 ```bash
-brew install supervisor
-mkdir -p ~/Library/Logs/supervisor
-cp ~/Documents/all_code/local-services/launchd/com.local-services.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.local-services.plist
+brew install supervisor uv
+cd ~/Documents/all_code/local-services
+./install.sh
 ```
 
 ### Day-to-day control
