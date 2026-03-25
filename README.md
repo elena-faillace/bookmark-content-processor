@@ -6,68 +6,79 @@ Save web pages with one click and find them later using natural language queries
 
 ## How it works
 
-1. **Save** a URL via the Chrome extension or the API directly
+1. **Save** a URL via the browser extension or the API directly
 2. The app fetches the page text, embeds it with a local ML model (`all-MiniLM-L6-v2`)
-3. **Search** using plain English — results are ranked by semantic similarity, not just keywords
+3. **Search** using plain English — results are ranked by semantic similarity, not keywords
 
 ---
 
 ## Setup
 
-**Requirements:** Python 3.12+, [uv](https://github.com/astral-sh/uv), Chrome
+**Requirements:** Python 3.12+, [uv](https://github.com/astral-sh/uv), [local-services](https://github.com/elena-faillace/local-services)
+
+### 1. Clone and install dependencies
 
 ```bash
-# Clone and install dependencies
 git clone <repo-url>
 cd bookmark-content-processor
 uv sync
-uv sync --group dev  # for running tests
 ```
 
----
+### 2. Start the server via local-services
 
-## Running the app
+This app is managed by the [local-services](https://github.com/elena-faillace/local-services) repo, which runs it as a background service via Supervisor and launchd (auto-starts at login).
 
-### Local HTTP API (recommended)
+If you haven't set up `local-services` yet, follow its README — it's a one-time `./install.sh` that bootstraps everything. It will ask for the path to this repo during setup.
+
+Once set up:
 
 ```bash
-uvicorn app.api:app --reload --port 8484
+supervisorctl status                     # check all services
+supervisorctl restart bookmark-processor # restart after code changes
 ```
 
-- API docs: http://localhost:8484/docs
-- Search UI: http://localhost:8484
+- Search UI: <http://localhost:8484>
+- API docs: <http://localhost:8484/docs>
+
+> **Running without local-services:** `uvicorn app.api:app --port 8484`
 
 ---
 
-## Chrome Extension
+## Browser extensions
 
-1. Open `chrome://extensions` in Chrome
+### Chrome
+
+1. Open `chrome://extensions`
 2. Enable **Developer Mode** (top right toggle)
-3. Click **Load unpacked** → select the `extension/` folder
+3. Click **Load unpacked** → select the `extension-chrome/` folder
 4. Click the extension icon on any page → **Save this page**
 
-> The local server must be running (`uvicorn app.api:app --port 8484`) for the extension to work.
+### Firefox
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on** → select any file inside `extension-firefox/`
+3. Click the extension icon on any page → **Save this page**
+
+> The server must be running for the extension to work.
 
 ---
 
 ## API Endpoints
 
 | Method | Path | Description |
-|--------|------|-------------|
+| ------ | ---- | ----------- |
 | `POST` | `/save` | Save a URL. Body: `{"url": "https://..."}` |
 | `GET` | `/search?q=...` | Semantic search. Returns ranked list of URLs. |
 | `GET` | `/` | Search UI (served as HTML) |
 | `GET` | `/docs` | Interactive API docs (Swagger) |
 
-**Save a URL via curl:**
 ```bash
+# Save a URL
 curl -X POST http://localhost:8484/save \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
-```
 
-**Search via curl:**
-```bash
+# Search
 curl "http://localhost:8484/search?q=machine+learning"
 ```
 
@@ -75,22 +86,27 @@ curl "http://localhost:8484/search?q=machine+learning"
 
 ## Project Structure
 
-```
+```text
 bookmark-content-processor/
-├── app/             # Python backend
-│   ├── api.py       # FastAPI server (HTTP endpoints)
-│   └── embeddings.py# Text extraction, embedding, storage, and vector search
-├── ui/              # Frontend
-│   └── search.html  # Search UI served by the API
-├── extension/       # Chrome extension (Manifest V3)
+├── app/
+│   ├── api.py           # FastAPI server (HTTP endpoints)
+│   ├── embeddings.py    # Text extraction, embedding, storage, vector search
+│   └── request_log.py   # SQLite request logging (logs.db)
+├── ui/
+│   └── search.html      # Search UI served by the API
+├── extension-chrome/    # Chrome extension (Manifest V3)
 │   ├── manifest.json
 │   ├── popup.html
 │   └── popup.js
-├── docs/            # Documentation
-│   └── GUIDE.md     # Full technical guide
-├── tests/           # pytest test suite
+├── extension-firefox/   # Firefox extension (Manifest V2)
+│   ├── manifest.json
+│   ├── popup.html
+│   └── popup.js
+├── docs/
+│   └── GUIDE.md         # Full technical guide
+├── tests/
 │   └── test_api.py
-└── chroma_db/       # Vector store (auto-created)
+└── chroma_db/           # Vector store (auto-created)
 ```
 
 ---
@@ -98,7 +114,7 @@ bookmark-content-processor/
 ## Stack
 
 | Package | Purpose |
-|---------|---------|
+| ------- | ------- |
 | `fastapi` + `uvicorn` | HTTP server |
 | `sentence-transformers` | Local text embeddings (`all-MiniLM-L6-v2`, ~80MB) |
 | `chromadb` | Local vector database for bookmarks |

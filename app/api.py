@@ -1,8 +1,6 @@
 import json
-import logging
 import time
 from contextlib import asynccontextmanager
-from io import StringIO
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,18 +13,12 @@ from .bookmarks_import import read_chrome_bookmarks
 from .embeddings import embed_and_store, extract_text, get_all_stored_ids, quality_check, search as embedding_search, store_url_only
 from .request_log import init_log_db, log_request
 
-log_stream = StringIO()
-logging.basicConfig(stream=log_stream, level=logging.INFO)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_log_db()
-    logging.info("Server starting up.")
     yield
     quality_check()
-    with open("logged_messages.txt", "w", encoding="utf-8") as f:
-        f.write(log_stream.getvalue())
 
 
 app = FastAPI(title="Bookmarks API", lifespan=lifespan)

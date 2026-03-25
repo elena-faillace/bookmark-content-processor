@@ -166,22 +166,20 @@ The `try/catch/finally` block handles errors gracefully — if the server isn't 
 
 FastAPI is a Python library for building HTTP servers. An HTTP server is a program that listens for requests (like the ones your browser sends when you load a page) and sends back responses. FastAPI makes it easy to define what URLs the server responds to and what it does with the data it receives.
 
-### Startup and shutdown — api.py:17–23
+### Startup and shutdown — api.py:17–21
 
 ```python
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logging.info("Server starting up.")
+    init_log_db()
     yield
     quality_check()
-    with open("logged_messages.txt", "w") as f:
-        f.write(log_stream.getvalue())
 ```
 
 This is a **lifespan** function — code that runs when the server starts and when it stops.
 
-- Everything **before** `yield` runs at startup: just a log message — ChromaDB creates its collection lazily on first use, so no explicit initialisation is needed
-- Everything **after** `yield` runs at shutdown: `quality_check()` removes any invalid entries from ChromaDB, logs are written to a file
+- Everything **before** `yield` runs at startup: `init_log_db()` creates the `logs.db` request log table if it doesn't exist yet — ChromaDB creates its collection lazily on first use, so no explicit initialisation is needed there
+- Everything **after** `yield` runs at shutdown: `quality_check()` removes any invalid entries from ChromaDB
 
 `@asynccontextmanager` is a decorator that turns this function into a context manager — a pattern for "set up, do work, tear down".
 

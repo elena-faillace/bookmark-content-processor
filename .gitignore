@@ -5,6 +5,8 @@ logs.db
 bookmarks.db
 chroma_db/
 list_bookmarks.txt
+.claude/
+.playwright-mcp/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
