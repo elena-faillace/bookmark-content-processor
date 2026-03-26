@@ -5,7 +5,7 @@ logs.db
 bookmarks.db
 chroma_db/
 list_bookmarks.txt
-.claude/
+#.claude/
 .playwright-mcp/
 
 # Byte-compiled / optimized / DLL files
