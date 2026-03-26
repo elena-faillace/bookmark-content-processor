@@ -96,6 +96,17 @@ def quality_check() -> None:
         logging.error("quality_check error: %s", e)
 
 
+def delete_url(url: str) -> bool:
+    """Remove a URL from ChromaDB. Returns True if it existed."""
+    collection = _get_collection()
+    existing = collection.get(ids=[url], include=[])
+    if not existing["ids"]:
+        return False
+    collection.delete(ids=[url])
+    logging.info("Deleted bookmark: %s", url)
+    return True
+
+
 def get_all_stored_ids() -> set[str]:
     """Return the set of all URL IDs currently stored in ChromaDB."""
     collection = _get_collection()

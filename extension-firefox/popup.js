@@ -25,6 +25,7 @@ btn.addEventListener("click", async () => {
     });
 
     if (res.ok) {
+      await browser.bookmarks.create({ url, title });
       statusEl.textContent = "Saved!";
       statusEl.className = "ok";
     } else {

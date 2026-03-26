@@ -10,7 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from .bookmarks_import import read_chrome_bookmarks
-from .embeddings import embed_and_store, extract_text, get_all_stored_ids, quality_check, search as embedding_search, store_url_only
+from .embeddings import delete_url, embed_and_store, extract_text, get_all_stored_ids, quality_check, search as embedding_search, store_url_only
 from .request_log import init_log_db, log_request
 
 
@@ -118,6 +118,13 @@ def import_bookmarks():
         yield f"data: {json.dumps({'done': True, 'imported': total, 'total': total})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@app.delete("/bookmark")
+def delete_bookmark(url: str = Query(...)):
+    if not delete_url(url):
+        raise HTTPException(status_code=404, detail="Bookmark not found.")
+    return {"status": "deleted", "url": url}
 
 
 @app.get("/search")
