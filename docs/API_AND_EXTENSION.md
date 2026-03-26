@@ -48,19 +48,51 @@ Semantic search over saved bookmarks.
 ---
 
 ### `DELETE /bookmark?url=<url>`
-Removes a bookmark from ChromaDB.
+Removes a bookmark from ChromaDB and records it in the deleted-bookmarks database.
 - **Query param:** `url` — exact URL to delete
 - **Response (JSON):**
   ```json
   { "status": "deleted", "url": "..." }
   ```
-- **Errors:** `404` if the URL is not in the database
-- **Called by:** search UI after user confirms deletion; also triggers browser bookmark removal via `postMessage` to extension (see below)
+- **Errors:** `404` if the URL is not in ChromaDB
+- **Called by:** search UI after user confirms deletion
+- **Side effects:** records the URL + title in `deleted.db` so it is excluded from future imports and cleaned up from all browser profiles on next startup; also triggers browser bookmark removal via `postMessage` to the extension (see below)
+
+---
+
+### `GET /deleted`
+Returns all deleted bookmarks, most recent first.
+- **Response (JSON):**
+  ```json
+  {
+    "deleted": [
+      { "url": "...", "title": "...", "deleted_at": "2026-03-26T10:00:00+00:00" },
+      ...
+    ]
+  }
+  ```
+- **Called by:** search UI (Trash panel); extension `background.js` on browser startup to clean up all profiles
+
+---
+
+### `POST /deleted/restore`
+Removes a URL from the deleted-bookmarks list and re-saves it to ChromaDB.
+- **Request body (JSON):**
+  ```json
+  { "url": "https://example.com", "title": "Page title" }
+  ```
+- **Response (JSON):**
+  ```json
+  { "status": "restored", "url": "..." }
+  ```
+- **Errors:** `404` if the URL is not in the deleted list
+- **Called by:** search UI Trash panel on "Recover" click
+- **Side effects:** re-embeds the URL; search UI also fires `window.postMessage({ type: "ADD_BOOKMARK", ... })` so the extension re-adds the bookmark to the browser
 
 ---
 
 ### `GET /import/bookmarks/preview`
-Checks how many Chrome bookmarks are not yet saved, without importing anything.
+Checks how many Chrome bookmarks are not yet saved, without importing anything. Excludes URLs already in the deleted-bookmarks list.
 - **Response (JSON):**
   ```json
   { "to_import": 5, "already_saved": 38, "total_found": 43 }
@@ -70,7 +102,7 @@ Checks how many Chrome bookmarks are not yet saved, without importing anything.
 ---
 
 ### `POST /import/bookmarks`
-Imports all Chrome bookmarks not yet in ChromaDB. Streams progress via Server-Sent Events.
+Imports all Chrome bookmarks not yet in ChromaDB. Skips URLs in the deleted-bookmarks list. Streams progress via Server-Sent Events.
 - **Response:** `text/event-stream`, one JSON event per bookmark:
   ```
   data: {"imported": 1, "total": 5}
@@ -80,6 +112,23 @@ Imports all Chrome bookmarks not yet in ChromaDB. Streams progress via Server-Se
   ```
 - **Called by:** search UI after the user confirms the import dialog
 - **Source of bookmarks:** reads Chrome's `Bookmarks` JSON file directly from the filesystem via `app/bookmarks_import.py`
+
+---
+
+## Deleted Bookmarks Database
+
+`deleted.db` (SQLite, same directory as the server) holds every URL the user has intentionally deleted. It is never automatically cleared — entries are only removed by an explicit restore.
+
+**Purpose:** acts as a cross-browser blocklist. Each extension fetches `GET /deleted` on browser startup and removes any matching bookmarks from that browser's profile. This means deleting once propagates to Chrome, Firefox, and any future browsers on the next launch.
+
+**Schema:**
+```sql
+CREATE TABLE deleted_bookmarks (
+    url        TEXT PRIMARY KEY,
+    title      TEXT NOT NULL DEFAULT '',
+    deleted_at TEXT NOT NULL   -- ISO-8601 UTC
+);
+```
 
 ---
 
@@ -105,15 +154,16 @@ Two separate extensions with identical behaviour, one per browser:
 | File | Context | Purpose |
 |---|---|---|
 | `popup.js` | Extension popup | Save current tab to server + browser bookmarks |
-| `background.js` | Background service worker (Chrome) / background page (Firefox) | Receives messages from the content script; calls `chrome.bookmarks.remove()` |
+| `background.js` | Background service worker (Chrome) / background page (Firefox) | Handles `removeBookmark` and `addBookmark` messages; runs `cleanupDeleted()` on browser startup |
 | `content_script.js` | Injected into `http://localhost:8484/*` | Bridges the search UI and the extension — listens for `postMessage` from the page and forwards to `background.js` |
 
 ---
 
 ## Extension ↔ Search UI Communication
 
-The search UI is a plain web page and cannot call browser APIs directly. When the user deletes a bookmark, the removal from browser bookmarks is done through a three-step bridge:
+The search UI is a plain web page and cannot call browser APIs directly. All bookmark operations go through a three-step bridge:
 
+### Delete
 ```
 search UI (localhost:8484)
   window.postMessage({ type: "REMOVE_BOOKMARK", url }, "*")
@@ -121,9 +171,28 @@ search UI (localhost:8484)
 content_script.js  [injected into the tab by the extension]
   chrome.runtime.sendMessage({ action: "removeBookmark", url })
 
-background.js  [extension background process]
-  chrome.bookmarks.search({ url })
-  chrome.bookmarks.remove(bookmark.id)
+background.js
+  chrome.bookmarks.search({ url })  →  chrome.bookmarks.remove(id)
+```
+
+### Recover (restore from Trash)
+```
+search UI
+  POST /deleted/restore  (re-embeds in ChromaDB, removes from deleted.db)
+  window.postMessage({ type: "ADD_BOOKMARK", url, title }, "*")
+
+content_script.js
+  chrome.runtime.sendMessage({ action: "addBookmark", url, title })
+
+background.js
+  chrome.bookmarks.create({ url, title })
+```
+
+### Startup cleanup (cross-browser enforcement)
+```
+background.js  [fires on chrome.runtime.onStartup]
+  GET /deleted  →  list of all deleted URLs
+  for each: chrome.bookmarks.search({ url })  →  chrome.bookmarks.remove(id)
 ```
 
 **Why each layer is needed:**

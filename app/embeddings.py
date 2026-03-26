@@ -18,7 +18,7 @@ def _get_model():
 def _get_collection():
     global _collection
     if _collection is None:
-        client = chromadb.PersistentClient(path="./chroma_db")
+        client = chromadb.PersistentClient(path="./data/chroma_db")
         _collection = client.get_or_create_collection(
             name="bookmarks",
             metadata={"hnsw:space": "cosine"},
@@ -94,6 +94,15 @@ def quality_check() -> None:
             logging.warning("quality_check: removed %d entries", len(ids_to_delete))
     except Exception as e:
         logging.error("quality_check error: %s", e)
+
+
+def get_url_metadata(url: str) -> dict | None:
+    """Return stored metadata for a URL, or None if not found."""
+    collection = _get_collection()
+    result = collection.get(ids=[url], include=["metadatas"])
+    if not result["ids"]:
+        return None
+    return result["metadatas"][0]
 
 
 def delete_url(url: str) -> bool:

@@ -2,7 +2,7 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 
-_DB_PATH = "logs.db"
+_DB_PATH = "data/logs.db"
 
 
 def init_log_db() -> None:

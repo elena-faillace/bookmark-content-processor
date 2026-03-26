@@ -1,9 +1,7 @@
 # Added by ELENA
 .DS_Store
 logged_messages.txt
-logs.db
-bookmarks.db
-chroma_db/
+data/
 list_bookmarks.txt
 #.claude/
 .playwright-mcp/

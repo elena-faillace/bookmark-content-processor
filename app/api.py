@@ -10,13 +10,15 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from .bookmarks_import import read_chrome_bookmarks
-from .embeddings import delete_url, embed_and_store, extract_text, get_all_stored_ids, quality_check, search as embedding_search, store_url_only
+from .deleted_db import add_deleted, get_all_deleted, init_deleted_db, restore_deleted
+from .embeddings import delete_url, embed_and_store, extract_text, get_all_stored_ids, get_url_metadata, quality_check, search as embedding_search, store_url_only
 from .request_log import init_log_db, log_request
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_log_db()
+    init_deleted_db()
     yield
     quality_check()
 
@@ -54,6 +56,11 @@ class SaveRequest(BaseModel):
     title: str = ""
 
 
+class RestoreRequest(BaseModel):
+    url: HttpUrl
+    title: str = ""
+
+
 @app.get("/")
 def serve_search_ui():
     return FileResponse("ui/search.html")
@@ -81,9 +88,10 @@ def preview_bookmarks():
         raise HTTPException(status_code=404, detail="Chrome bookmarks file not found.")
 
     existing = get_all_stored_ids()
+    deleted_urls = {d["url"] for d in get_all_deleted()}
     to_import = [
         bm for bm in bookmarks
-        if bm["url"].startswith("http") and bm["url"] not in existing
+        if bm["url"].startswith("http") and bm["url"] not in existing and bm["url"] not in deleted_urls
     ]
     return {
         "to_import": len(to_import),
@@ -101,9 +109,10 @@ def import_bookmarks():
         raise HTTPException(status_code=404, detail="Chrome bookmarks file not found.")
 
     existing = get_all_stored_ids()
+    deleted_urls = {d["url"] for d in get_all_deleted()}
     queue = [
         bm for bm in bookmarks
-        if bm["url"].startswith("http") and bm["url"] not in existing
+        if bm["url"].startswith("http") and bm["url"] not in existing and bm["url"] not in deleted_urls
     ]
     total = len(queue)
 
@@ -122,9 +131,29 @@ def import_bookmarks():
 
 @app.delete("/bookmark")
 def delete_bookmark(url: str = Query(...)):
+    meta = get_url_metadata(url)
     if not delete_url(url):
         raise HTTPException(status_code=404, detail="Bookmark not found.")
+    add_deleted(url, title=meta.get("title", "") if meta else "")
     return {"status": "deleted", "url": url}
+
+
+@app.get("/deleted")
+def list_deleted():
+    return {"deleted": get_all_deleted()}
+
+
+@app.post("/deleted/restore")
+def restore_bookmark(body: RestoreRequest):
+    url = str(body.url)
+    if not restore_deleted(url):
+        raise HTTPException(status_code=404, detail="URL not in deleted list.")
+    text = extract_text(url)
+    if text:
+        embed_and_store(url, text, body.title)
+    else:
+        store_url_only(url, body.title)
+    return {"status": "restored", "url": url}
 
 
 @app.get("/search")
