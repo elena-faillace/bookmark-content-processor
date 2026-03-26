@@ -35,6 +35,25 @@ Saves a URL to ChromaDB with semantic embedding.
 
 ---
 
+### `GET /bookmarks?offset=<n>&limit=<n>`
+Returns all saved bookmarks, paginated, sorted by date descending.
+- **Query params:** `offset` (default `0`), `limit` (default `50`)
+- **Response (JSON):**
+  ```json
+  {
+    "items": [
+      { "url": "...", "title": "...", "date": "2026-03-26T10:00:00+00:00", "text_extracted": true },
+      ...
+    ],
+    "total": 120,
+    "offset": 0,
+    "limit": 50
+  }
+  ```
+- **Called by:** search UI Browse view for paginated listing
+
+---
+
 ### `GET /search?q=<query>`
 Semantic search over saved bookmarks.
 - **Query param:** `q` — natural language search string (min length 1)

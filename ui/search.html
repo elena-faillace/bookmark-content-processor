@@ -273,6 +273,33 @@
     }
     .delete-no:hover { background: #1a1a24; color: #e0e0e0; }
     .empty { color: #666; text-align: center; margin-top: 20px; }
+
+    /* Browse mode */
+    .browse-btn {
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: transparent;
+      color: #aaa;
+      font-weight: normal;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .browse-btn:hover { background: #1a1a24; color: #e0e0e0; border-color: #666; }
+    .browse-btn.active { background: #1a1a24; color: #c39bd3; border-color: #c39bd3; }
+    #browseCount { font-size: 0.82rem; color: #555; text-align: center; margin-bottom: 12px; }
+    #loadMoreBtn {
+      display: none;
+      margin: 16px auto 0;
+      padding: 10px 28px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: transparent;
+      color: #aaa;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    #loadMoreBtn:hover { background: #1a1a24; color: #e0e0e0; }
   </style>
 </head>
 <body>
@@ -308,8 +335,11 @@
   <div class="search-row">
     <input type="text" id="query" placeholder="e.g. machine learning tutorials" />
     <button onclick="doSearch()">Search</button>
+    <button class="browse-btn" id="browseBtn" onclick="toggleBrowse()">Browse</button>
   </div>
+  <div id="browseCount"></div>
   <div id="results"></div>
+  <button id="loadMoreBtn" onclick="loadMore()">Load more</button>
 
   <script>
     document.getElementById("query").addEventListener("keydown", (e) => {
@@ -495,10 +525,84 @@
       }
     }
 
+    let browseMode = false;
+    let browseOffset = 0;
+    const BROWSE_LIMIT = 50;
+
+    function toggleBrowse() {
+      browseMode = !browseMode;
+      const btn = document.getElementById("browseBtn");
+      btn.classList.toggle("active", browseMode);
+      if (browseMode) {
+        document.getElementById("query").value = "";
+        browseOffset = 0;
+        document.getElementById("results").innerHTML = "";
+        document.getElementById("browseCount").textContent = "";
+        loadMore();
+      } else {
+        document.getElementById("results").innerHTML = "";
+        document.getElementById("browseCount").textContent = "";
+        document.getElementById("loadMoreBtn").style.display = "none";
+      }
+    }
+
+    async function loadMore() {
+      const container = document.getElementById("results");
+      const loadBtn = document.getElementById("loadMoreBtn");
+      loadBtn.disabled = true;
+      if (browseOffset === 0) container.innerHTML = '<p class="empty">Loading...</p>';
+      try {
+        const res = await fetch(`/bookmarks?offset=${browseOffset}&limit=${BROWSE_LIMIT}`);
+        const data = await res.json();
+        if (browseOffset === 0) container.innerHTML = "";
+        if (!data.items || data.items.length === 0) {
+          if (browseOffset === 0) container.innerHTML = '<p class="empty">No bookmarks saved yet.</p>';
+          loadBtn.style.display = "none";
+          return;
+        }
+        document.getElementById("browseCount").textContent =
+          `${data.total} bookmark${data.total !== 1 ? "s" : ""} saved`;
+        container.insertAdjacentHTML("beforeend", data.items.map(({ url, title }) => renderCard(url, title)).join(""));
+        browseOffset += data.items.length;
+        const hasMore = browseOffset < data.total;
+        loadBtn.style.display = hasMore ? "block" : "none";
+        loadBtn.disabled = false;
+      } catch (_) {
+        container.innerHTML = '<p class="empty">Error connecting to the API.</p>';
+        loadBtn.style.display = "none";
+      }
+    }
+
+    function renderCard(url, title) {
+      let hostname = url;
+      try { hostname = new URL(url).hostname; } catch (_) {}
+      const safeUrl = JSON.stringify(url);
+      return `<div class="result-item">
+        <button class="delete-btn" onclick="promptDelete(this)" data-url=${safeUrl} title="Remove bookmark">&times;</button>
+        <div class="result-title-row">
+          <img class="result-favicon" src="https://www.google.com/s2/favicons?domain=${hostname}&sz=16" />
+          <a href="${url}" target="_blank" rel="noopener">${title || url}</a>
+        </div>
+        <div class="result-url">${hostname}</div>
+        <div class="delete-confirm">
+          <span>Remove this bookmark?</span>
+          <button class="delete-yes" onclick="confirmDelete(this)">Remove</button>
+          <button class="delete-no" onclick="cancelDelete(this)">Cancel</button>
+        </div>
+      </div>`;
+    }
+
     async function doSearch() {
       const q = document.getElementById("query").value.trim();
       const container = document.getElementById("results");
       if (!q) return;
+
+      if (browseMode) {
+        browseMode = false;
+        document.getElementById("browseBtn").classList.remove("active");
+        document.getElementById("loadMoreBtn").style.display = "none";
+        document.getElementById("browseCount").textContent = "";
+      }
 
       container.innerHTML = '<p class="empty">Searching...</p>';
 
@@ -511,26 +615,7 @@
           return;
         }
 
-        container.innerHTML = data.results
-          .map(({ url, title }) => {
-            let hostname = url;
-            try { hostname = new URL(url).hostname; } catch (_) {}
-            const safeUrl = JSON.stringify(url);
-            return `<div class="result-item">
-              <button class="delete-btn" onclick="promptDelete(this)" data-url=${safeUrl} title="Remove bookmark">&times;</button>
-              <div class="result-title-row">
-                <img class="result-favicon" src="https://www.google.com/s2/favicons?domain=${hostname}&sz=16" />
-                <a href="${url}" target="_blank" rel="noopener">${title || url}</a>
-              </div>
-              <div class="result-url">${hostname}</div>
-              <div class="delete-confirm">
-                <span>Remove this bookmark?</span>
-                <button class="delete-yes" onclick="confirmDelete(this)">Remove</button>
-                <button class="delete-no" onclick="cancelDelete(this)">Cancel</button>
-              </div>
-            </div>`;
-          })
-          .join("");
+        container.innerHTML = data.results.map(({ url, title }) => renderCard(url, title)).join("");
       } catch (err) {
         container.innerHTML = '<p class="empty">Error connecting to the API.</p>';
       }

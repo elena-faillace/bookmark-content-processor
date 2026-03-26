@@ -124,6 +124,26 @@ def get_all_stored_ids() -> set[str]:
     return set(collection.get(include=[])["ids"])
 
 
+def get_all_bookmarks(offset: int = 0, limit: int = 50) -> dict:
+    """Return paginated bookmarks sorted by date descending."""
+    collection = _get_collection()
+    total = collection.count()
+    if total == 0:
+        return {"items": [], "total": 0, "offset": offset, "limit": limit}
+    result = collection.get(limit=limit, offset=offset, include=["metadatas"])
+    items = [
+        {
+            "url": id_,
+            "title": meta.get("title", ""),
+            "date": meta.get("date", ""),
+            "text_extracted": meta.get("text_extracted", False),
+        }
+        for id_, meta in zip(result["ids"], result["metadatas"])
+    ]
+    items.sort(key=lambda x: x["date"], reverse=True)
+    return {"items": items, "total": total, "offset": offset, "limit": limit}
+
+
 def search(query: str, n: int = 10) -> list[dict]:
     """Return top-N results (url + title) whose content is most similar to the query."""
     try:

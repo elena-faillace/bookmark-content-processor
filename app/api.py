@@ -11,7 +11,7 @@ from starlette.requests import Request
 
 from .bookmarks_import import read_chrome_bookmarks
 from .deleted_db import add_deleted, get_all_deleted, init_deleted_db, restore_deleted
-from .embeddings import delete_url, embed_and_store, extract_text, get_all_stored_ids, get_url_metadata, quality_check, search as embedding_search, store_url_only
+from .embeddings import delete_url, embed_and_store, extract_text, get_all_bookmarks, get_all_stored_ids, get_url_metadata, quality_check, search as embedding_search, store_url_only
 from .request_log import init_log_db, log_request
 
 
@@ -154,6 +154,11 @@ def restore_bookmark(body: RestoreRequest):
     else:
         store_url_only(url, body.title)
     return {"status": "restored", "url": url}
+
+
+@app.get("/bookmarks")
+def list_bookmarks(offset: int = 0, limit: int = 50):
+    return get_all_bookmarks(offset=offset, limit=limit)
 
 
 @app.get("/search")
